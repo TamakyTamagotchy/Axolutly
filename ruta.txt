@@ -1,0 +1,26 @@
+youtube-downloader/
+│
+│
+│── Animation/
+│   └── Animation.py
+│
+├── config/
+│   └── logger.py
+│
+│── icons/
+│   │── icono_cancelar
+│   ├── icono_carpeta
+│   ├── icono_descarga
+│   └── icono_youtube
+│
+├── src/
+│   ├── ui/
+│   │   └── main_window.py
+│   │
+│   └── services/
+│       ├── hilo_descarga.py
+│       └── utils.py
+│   
+|── main.py
+├── requirements.txt
+└── README.md
