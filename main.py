@@ -1,4 +1,4 @@
-# src/main.py
+# main.py
 import sys
 from PyQt6.QtWidgets import QApplication
 from src.ui.main_window import YouTubeDownloader

@@ -1,0 +1,68 @@
+2025-01-31 16:52:00,917 - INFO - Aplicación YouTube Downloader iniciada
+2025-01-31 16:52:01,188 - INFO - Aplicación iniciada
+2025-01-31 16:52:05,624 - INFO - Aplicación YouTube Downloader iniciada
+2025-01-31 16:52:05,828 - INFO - Aplicación iniciada
+2025-01-31 16:52:09,796 - INFO - Descarga iniciada en modo 1080p
+2025-01-31 16:52:17,578 - INFO - Progreso: 0.0%, Velocidad:   91.16KiB/s, ETA: 03:56
+2025-01-31 16:52:17,579 - INFO - Progreso: 0.0%, Velocidad:  250.67KiB/s, ETA: 01:25
+2025-01-31 16:52:17,579 - INFO - Progreso: 0.0%, Velocidad:  539.90KiB/s, ETA: 00:39
+2025-01-31 16:52:17,580 - INFO - Progreso: 0.1%, Velocidad:    1.05MiB/s, ETA: 00:20
+2025-01-31 16:52:17,585 - INFO - Progreso: 0.1%, Velocidad:    1.69MiB/s, ETA: 00:12
+2025-01-31 16:52:17,597 - INFO - Progreso: 0.3%, Velocidad:    2.06MiB/s, ETA: 00:10
+2025-01-31 16:52:17,640 - INFO - Progreso: 0.6%, Velocidad:    1.70MiB/s, ETA: 00:12
+2025-01-31 16:52:17,715 - INFO - Progreso: 1.2%, Velocidad:    1.69MiB/s, ETA: 00:12
+2025-01-31 16:52:17,814 - INFO - Progreso: 2.4%, Velocidad:    2.02MiB/s, ETA: 00:10
+2025-01-31 16:52:18,033 - INFO - Progreso: 4.8%, Velocidad:    2.14MiB/s, ETA: 00:09
+2025-01-31 16:52:18,295 - INFO - Progreso: 9.5%, Velocidad:    2.75MiB/s, ETA: 00:06
+2025-01-31 16:52:18,788 - INFO - Progreso: 19.0%, Velocidad:    3.27MiB/s, ETA: 00:05
+2025-01-31 16:52:19,918 - INFO - Progreso: 38.1%, Velocidad:    3.40MiB/s, ETA: 00:03
+2025-01-31 16:52:20,422 - INFO - Progreso: 45.3%, Velocidad:    3.34MiB/s, ETA: 00:03
+2025-01-31 16:52:20,593 - INFO - Progreso: 45.3%, Velocidad:  250.62KiB/s, ETA: 00:58
+2025-01-31 16:52:20,594 - INFO - Progreso: 45.3%, Velocidad:  501.25KiB/s, ETA: 00:23
+2025-01-31 16:52:20,595 - INFO - Progreso: 45.3%, Velocidad: 1002.53KiB/s, ETA: 00:11
+2025-01-31 16:52:20,597 - INFO - Progreso: 45.4%, Velocidad:    1.63MiB/s, ETA: 00:07
+2025-01-31 16:52:20,598 - INFO - Progreso: 45.5%, Velocidad:    2.76MiB/s, ETA: 00:04
+2025-01-31 16:52:20,604 - INFO - Progreso: 45.6%, Velocidad:    3.86MiB/s, ETA: 00:02
+2025-01-31 16:52:20,620 - INFO - Progreso: 45.9%, Velocidad:    3.89MiB/s, ETA: 00:02
+2025-01-31 16:52:20,654 - INFO - Progreso: 46.5%, Velocidad:    3.78MiB/s, ETA: 00:02
+2025-01-31 16:52:20,716 - INFO - Progreso: 47.7%, Velocidad:    3.91MiB/s, ETA: 00:02
+2025-01-31 16:52:20,834 - INFO - Progreso: 50.1%, Velocidad:    4.06MiB/s, ETA: 00:02
+2025-01-31 16:52:21,076 - INFO - Progreso: 54.8%, Velocidad:    4.10MiB/s, ETA: 00:02
+2025-01-31 16:52:21,496 - INFO - Progreso: 64.3%, Velocidad:    4.40MiB/s, ETA: 00:01
+2025-01-31 16:52:22,300 - INFO - Progreso: 83.4%, Velocidad:    4.67MiB/s, ETA: 00:00
+2025-01-31 16:52:22,715 - INFO - Progreso: 92.2%, Velocidad:    4.64MiB/s, ETA: 00:00
+2025-01-31 16:52:22,815 - INFO - Progreso: 92.2%, Velocidad:  501.29KiB/s, ETA: 00:03
+2025-01-31 16:52:22,815 - INFO - Progreso: 92.2%, Velocidad: 1002.38KiB/s, ETA: 00:01
+2025-01-31 16:52:22,816 - INFO - Progreso: 92.3%, Velocidad:    2.28MiB/s, ETA: 00:00
+2025-01-31 16:52:22,817 - INFO - Progreso: 92.3%, Velocidad:    3.67MiB/s, ETA: 00:00
+2025-01-31 16:52:22,818 - INFO - Progreso: 92.4%, Velocidad:    6.07MiB/s, ETA: 00:00
+2025-01-31 16:52:22,824 - INFO - Progreso: 92.5%, Velocidad:    5.61MiB/s, ETA: 00:00
+2025-01-31 16:52:22,836 - INFO - Progreso: 92.8%, Velocidad:    5.18MiB/s, ETA: 00:00
+2025-01-31 16:52:22,862 - INFO - Progreso: 93.4%, Velocidad:    5.10MiB/s, ETA: 00:00
+2025-01-31 16:52:22,917 - INFO - Progreso: 94.6%, Velocidad:    4.77MiB/s, ETA: 00:00
+2025-01-31 16:52:23,036 - INFO - Progreso: 97.0%, Velocidad:    4.47MiB/s, ETA: 00:00
+2025-01-31 16:52:23,154 - INFO - Progreso: 100.0%, Velocidad:    4.79MiB/s, ETA: 00:00
+2025-01-31 16:52:23,156 - INFO - Descarga finalizada
+2025-01-31 16:52:23,290 - INFO - Progreso: 0.0%, Velocidad:  501.41KiB/s, ETA: 00:06
+2025-01-31 16:52:23,291 - INFO - Progreso: 0.1%, Velocidad: 1002.38KiB/s, ETA: 00:03
+2025-01-31 16:52:23,292 - INFO - Progreso: 0.2%, Velocidad:    1.71MiB/s, ETA: 00:01
+2025-01-31 16:52:23,293 - INFO - Progreso: 0.4%, Velocidad:    2.45MiB/s, ETA: 00:01
+2025-01-31 16:52:23,294 - INFO - Progreso: 0.9%, Velocidad:    4.34MiB/s, ETA: 00:00
+2025-01-31 16:52:23,304 - INFO - Progreso: 1.8%, Velocidad:    3.86MiB/s, ETA: 00:00
+2025-01-31 16:52:23,315 - INFO - Progreso: 3.7%, Velocidad:    4.44MiB/s, ETA: 00:00
+2025-01-31 16:52:23,339 - INFO - Progreso: 7.4%, Velocidad:    4.90MiB/s, ETA: 00:00
+2025-01-31 16:52:23,385 - INFO - Progreso: 14.7%, Velocidad:    5.11MiB/s, ETA: 00:00
+2025-01-31 16:52:23,485 - INFO - Progreso: 29.5%, Velocidad:    5.06MiB/s, ETA: 00:00
+2025-01-31 16:52:23,738 - INFO - Progreso: 59.0%, Velocidad:    4.43MiB/s, ETA: 00:00
+2025-01-31 16:52:24,041 - INFO - Progreso: 100.0%, Velocidad:    4.50MiB/s, ETA: 00:00
+2025-01-31 16:52:24,043 - INFO - Descarga finalizada
+2025-01-31 16:52:24,256 - INFO - Descarga completada: 1080p
+2025-01-31 16:52:24,257 - INFO - Descarga completada: PA K - MARC SEGUÍ, ÁLVARO DÍAZ.mp4
+2025-01-31 18:00:17,462 - INFO - Aplicación YouTube Downloader iniciada
+2025-01-31 18:00:17,682 - INFO - Aplicación iniciada
+2025-01-31 18:00:21,844 - INFO - Descarga iniciada en modo 2160p
+2025-01-31 18:00:36,838 - INFO - Archivo final: D:\Escritorio\BAD BUNNY - BAILE INoLVIDABLE (Video Oficial) ｜ DeBÍ TiRAR MáS FOToS.mp4
+2025-01-31 18:00:36,895 - INFO - Descarga completada: 2160p
+2025-01-31 18:00:36,897 - INFO - Descarga completada: BAD BUNNY - BAILE INoLVIDABLE (Video Oficial) ｜ DeBÍ TiRAR MáS FOToS.mp4
+2025-01-31 18:00:38,951 - INFO - Mensaje de éxito mostrado al usuario: Descarga completada con éxito.
+Archivo: BAD BUNNY - BAILE INoLVIDABLE (Video Oficial) ｜ DeBÍ TiRAR MáS FOToS.mp4

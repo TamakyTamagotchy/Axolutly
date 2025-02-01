@@ -1,26 +1,37 @@
 from PyQt6.QtWidgets import QProgressBar
-from PyQt6.QtCore import QPropertyAnimation, QEasingCurve
-from config.logger import Config
+from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, pyqtSlot
 
-# Clase de barra de progreso animada
 class AnimatedProgressBar(QProgressBar):
-    """Barra de progreso animada."""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._animation = QPropertyAnimation(self, b"value")
-        self._animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
-        self._animation.setDuration(Config.ANIMATION_DURATION)
-        self._animation.finished.connect(self._on_animation_finished)
+        self._animacion = QPropertyAnimation(self, b"value")
+        self._animacion.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self._animacion.setDuration(350)
+        self._animacion.finished.connect(self._ajustar_valor_final)
+        self.setRange(0, 100)
 
-    def setValue(self, value):
-        if value < self.value():
-            super().setValue(value)
+    def setValue(self, valor):
+        """Sobreescribe el valor con animación controlada"""
+        try:
+            valor_entero = int(valor)
+        except (TypeError, ValueError):
+            valor_entero = self.value()
+        
+        valor_ajustado = max(self.minimum(), min(valor_entero, self.maximum()))
+        
+        if valor_ajustado < self.value():
+            self._animacion.stop()
+            super().setValue(valor_ajustado)
         else:
-            self._animation.stop()
-            self._animation.setStartValue(self.value())
-            self._animation.setEndValue(value)
-            self._animation.start()
+            self._iniciar_animacion(valor_ajustado)
 
-    def _on_animation_finished(self):
-        # Asegurarse de que el valor final se establezca correctamente
-        super().setValue(self._animation.endValue())
+    def _iniciar_animacion(self, valor_objetivo):
+        """Controla la lógica de la animación"""
+        self._animacion.setStartValue(self.value())
+        self._animacion.setEndValue(valor_objetivo)
+        self._animacion.start()
+
+    @pyqtSlot()
+    def _ajustar_valor_final(self):
+        """Asegura el valor final después de la animación"""
+        super().setValue(self._animacion.endValue())

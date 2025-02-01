@@ -199,8 +199,13 @@ class YouTubeDownloader(QWidget):
     
     def open_last_download(self):
         if self.last_download_path:
-            Utils.open_last_download(self.last_download_path)
-
+            if os.path.exists(self.last_download_path):  # Verificar existencia real
+                Utils.safe_open_file(self.last_download_path)
+            else:
+                self.show_error_message("El archivo ya no existe en la ubicación original")
+                self.open_last_download_button.setEnabled(False)
+                logger.warning(f"Archivo no encontrado: {self.last_download_path}")
+                
     def start_download(self):
         url = self.url_input.text().strip()
         if not url or not self.validate_youtube_url(url):
@@ -211,12 +216,12 @@ class YouTubeDownloader(QWidget):
         if not output_dir:
             return
 
-        quality_text = self.quality_combo.currentText().split()[0].rstrip("p")
+        quality_text = self.quality_combo.currentText().split('p')[0].strip()  # Extraer solo el número
         try:
             quality = int(quality_text)
         except ValueError:
-            self.show_error_message("Error al obtener la calidad del video.")
-            return
+            self.show_error_message("Calidad no válida. Usando 1080p por defecto.")
+            quality = 1080  # Valor por defecto
 
         self.download_thread = DownloadThread(url, quality, self.audio_only_checkbox.isChecked(), output_dir)
         self.download_thread.progress.connect(self.update_progress)
@@ -246,10 +251,10 @@ class YouTubeDownloader(QWidget):
             self.status_label.setText("")
             self.progress_bar.setStyleSheet("")
             self.download_button.setEnabled(True)
-
-    def update_progress(self, percentage):
-        self.progress_bar.setValue(int(percentage))
-        logger.debug(f"Progreso de la descarga: {percentage}%")
+            
+    def update_progress(self, percentage: float):
+        self.progress_bar.setValue(percentage)  # Acepta float pero se convierte a int internamente
+        logger.debug(f"Progreso actualizado: {percentage}%")
         
     def download_finished(self, file_path):
         self.status_label.setText("¡Descarga completada!")

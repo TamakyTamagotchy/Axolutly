@@ -7,10 +7,11 @@ from logging.handlers import RotatingFileHandler
 class Config:
     
     """ Valores absolutos de los diferentes archivos creados e inlcuyendo la animacion  """
-    DIR_LOGS = "Registros"
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    DIR_LOGS = os.path.join(BASE_DIR, "Registros")
     LOG_FILE = "Registro_Youtube.log"
     ANIMATION_DURATION = 300
-    ICON_DIR = "Python/Youtube_Downloader/icons"
+    ICON_DIR = os.path.join(BASE_DIR, "icons")
     ICON_YOUTUBE = "icono_youtube.png"
     ICON_DOWNLOAD = "icono_descarga.png"
     ICON_CANCEL = "icono_cancelar.png"
