@@ -1,14 +1,12 @@
+import re
 import os
 import subprocess
 import sys
-import re
 from urllib.parse import urlparse, unquote
 from pathlib import Path
 from config.logger import logger
 
 class Utils:
-    ALLOWED_DOMAINS = {'youtube.com', 'youtu.be', 'www.youtube.com'}
-    
     @staticmethod
     def validate_youtube_url(url):
         """Valida URLs de YouTube con múltiples formatos y límite de caracteres"""
@@ -25,14 +23,15 @@ class Utils:
                 'www.youtube.com',
                 'm.youtube.com',
                 'youtu.be',
-                'music.youtube.com'
+                'music.youtube.com',
+                'shorts.youtube.com'
             }
             
             if parsed.netloc.lower() not in allowed_domains:
                 return False
                 
             # Patrón mejorado para múltiples formatos
-            youtube_pattern = r'^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]{11}).*'
+            youtube_pattern = r'^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|shorts\/|&v=)([^#&?]{11}).*'
             match = re.match(youtube_pattern, cleaned_url)
             
             # Verificar si el ID del video es válido (11 caracteres)
@@ -51,12 +50,24 @@ class Utils:
     
     @staticmethod
     def sanitize_filepath(filepath):
+        """Sanitiza rutas manteniendo la estructura de directorios"""
         try:
-            # Permitir caracteres unicode y espacios
-            cleaned = re.sub(r'[<>:"|?*\\\x00-\x1F]', '', filepath)  # Eliminar solo caracteres peligrosos
+            # Preservar barras en la ruta
+            cleaned = re.sub(r'[<>"|?*\x00-\x1F]', '', filepath)  # No eliminar '/' ni '\'
+            
+            # Decodificar URL encoding conservando la estructura
             decoded = unquote(cleaned)
+            
+            # Normalización avanzada de rutas
             normalized = os.path.normpath(decoded)
-            return normalized[:260] if sys.platform == "win32" else normalized[:4096]
+            
+            # Resolver rutas sin verificar existencia
+            resolved = str(Path(normalized).resolve(strict=False))
+            
+            # Limitar longitud y mantener codificación
+            max_length = 260 if sys.platform == "win32" else 4096
+            return resolved[:max_length]
+            
         except Exception as e:
             logger.error(f"Error sanitizando ruta: {str(e)}")
             return None
@@ -171,27 +182,3 @@ class Utils:
         except Exception as e:
             logger.error(f"Error validando ruta: {str(e)}")
             return False
-
-    @staticmethod
-    def sanitize_filepath(filepath):
-        """Sanitiza rutas manteniendo la estructura de directorios"""
-        try:
-            # Preservar barras en la ruta
-            cleaned = re.sub(r'[<>"|?*\x00-\x1F]', '', filepath)  # No eliminar '/' ni '\'
-            
-            # Decodificar URL encoding conservando la estructura
-            decoded = unquote(cleaned)
-            
-            # Normalización avanzada de rutas
-            normalized = os.path.normpath(decoded)
-            
-            # Resolver rutas sin verificar existencia
-            resolved = str(Path(normalized).resolve(strict=False))
-            
-            # Limitar longitud y mantener codificación
-            max_length = 260 if sys.platform == "win32" else 4096
-            return resolved[:max_length]
-            
-        except Exception as e:
-            logger.error(f"Error sanitizando ruta: {str(e)}")
-            return None

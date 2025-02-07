@@ -1,6 +1,5 @@
 #formato base de la clase de hilo de descarga
-from PyQt6.QtCore import QThread, pyqtSignal
-from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtCore import QThread, pyqtSignal, QMutex, QWaitCondition, pyqtSlot
 import os
 import ffmpeg
 import yt_dlp
@@ -16,6 +15,8 @@ class DownloadThread(QThread):
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
     video_info = pyqtSignal(dict)
+    # Nueva señal para pedir confirmación
+    requestOverwritePermission = pyqtSignal(str)
 
     def __init__(self, video_url, quality, audio_only, output_dir):
         super().__init__()
@@ -26,6 +27,10 @@ class DownloadThread(QThread):
         self.cancelled = False
         self.final_filename = None  # Almacenará el nombre real del archivo
         self.temp_file = None  # Almacenará el archivo temporal antes de conversión
+        # Atributos para la respuesta de sobrescritura
+        self.overwrite_answer = None
+        self.mutex = QMutex()
+        self.waitCondition = QWaitCondition()
         
     def run(self):
         try:
@@ -38,6 +43,9 @@ class DownloadThread(QThread):
                     if not self.ask_overwrite_permission(temp_filename):
                         self.cancelled = True
                         raise Exception("Descarga cancelada por el usuario")
+                    else:
+                        # Nuevo: Eliminar el archivo existente antes de continuar
+                        os.remove(temp_filename)
                 
                 ydl.download([self.video_url])
                 
@@ -67,17 +75,24 @@ class DownloadThread(QThread):
                 os.remove(self.temp_file)
                 
     def ask_overwrite_permission(self, file_name):
-        msg_box = QMessageBox()
-        msg_box.setIcon(QMessageBox.Icon.Warning)
-        msg_box.setText(f"El archivo '{file_name}' ya existe. ¿Desea sobrescribirlo?")
-        msg_box.setWindowTitle("Confirmar Sobrescritura")
-        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        return msg_box.exec() == QMessageBox.StandardButton.Yes
+        self.overwrite_answer = None
+        # Emitir señal para pedir confirmación en el hilo principal
+        self.requestOverwritePermission.emit(file_name)
+        self.mutex.lock()
+        self.waitCondition.wait(self.mutex)
+        self.mutex.unlock()
+        return self.overwrite_answer
+
+    @pyqtSlot(bool)
+    def set_overwrite_answer(self, answer):
+        self.mutex.lock()
+        self.overwrite_answer = answer
+        self.waitCondition.wakeAll()
+        self.mutex.unlock()
 
     def cancel(self):
         self.cancelled = True
         self.quit()
-        self.wait()
             
     def process_conversion(self, input_path):
         """Convierte el archivo a MP4 si no está en ese formato"""
@@ -96,7 +111,7 @@ class DownloadThread(QThread):
                 .input(input_path)
                 .output(output_path, vcodec='copy', acodec='copy')
                 .global_args('-loglevel', 'error')
-                .run()
+                .run(quiet=True)  # Añadido quiet=True para evitar salida en consola
             )
             
             # Verificar si el archivo de salida fue creado correctamente
@@ -113,17 +128,15 @@ class DownloadThread(QThread):
             return input_path  # Devolver original si falla
         
     def get_ydl_options(self):
-        """Configuración modificada para priorizar calidad sobre formato"""
         opts = {
             'outtmpl': os.path.join(self.output_dir, '%(title)s.%(ext)s'),
             'progress_hooks': [self.progress_hook],
             'noplaylist': True,
             'retries': 5,
             'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, como Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
         }
-
         if self.audio_only:
             opts.update({
                 'format': 'bestaudio/best',
@@ -134,11 +147,10 @@ class DownloadThread(QThread):
             })
         else:
             opts.update({
-                # Priorizar la máxima calidad disponible
-                'format': f'bestvideo[height<={self.quality}]+bestaudio/best',
-                # Forzar la descarga del formato nativo
-                'merge_output_format': None,
-                'format_sort': [f'res:{self.quality}', 'res', '+codec']
+                'format': f'bestvideo[height<={self.quality}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                'merge_output_format': 'mp4',
+                #'format_sort': ['hasvid', 'vcodec:h264', 'res', 'fps', 'abr', 'acodec', 'asr', 'filesize', 'ext'], #esto limita las descargas a 1080p
+                'format_sort': ['height', 'vcodec:h264', 'filesize', 'ext'],
             })
         return opts
 
@@ -146,12 +158,23 @@ class DownloadThread(QThread):
         if self.cancelled:
             raise Exception("Descarga cancelada por el usuario")
         if d['status'] == 'downloading':
-            percent_str = d.get('_percent_str', '0%').strip().replace('%', '')
-            try:
-                percent = float(percent_str)
-                self.progress.emit(int(percent))  # Emitir como entero
-            except ValueError:
-                pass  # Ignorar valores inválidos
+            if d.get('total_bytes'):
+                downloaded = d.get('downloaded_bytes', 0)
+                total = d['total_bytes']
+                percent = downloaded / total * 100
+                self.progress.emit(int(percent))
+            elif d.get('total_bytes_estimate'):
+                downloaded = d.get('downloaded_bytes', 0)
+                total = d['total_bytes_estimate']
+                percent = downloaded / total * 100
+                self.progress.emit(int(percent))
+            else:
+                percent_str = d.get('_percent_str', '0%').strip().replace('%', '')
+                try:
+                    percent = float(percent_str)
+                    self.progress.emit(int(percent))
+                except ValueError:
+                    pass  # Ignorar valores inválidos
         elif d['status'] == 'finished':
             self.progress.emit(100)
             self.final_filename = d['info_dict']['_filename']
