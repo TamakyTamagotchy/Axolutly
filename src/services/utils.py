@@ -3,8 +3,8 @@ import os
 import subprocess
 import sys
 from urllib.parse import urlparse, unquote
-from pathlib import Path
 from config.logger import logger
+from yt_dlp.utils import sanitize_path
 
 class Utils:
     @staticmethod
@@ -32,7 +32,11 @@ class Utils:
                 
             # Patrón mejorado para múltiples formatos
             youtube_pattern = r'^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|shorts\/|&v=)([^#&?]{11}).*'
-            match = re.match(youtube_pattern, cleaned_url)
+            try:
+                match = re.match(youtube_pattern, cleaned_url)
+            except Exception as regex_error:
+                logger.error(f"Error aplicando regex en validate_youtube_url: {str(regex_error)}")
+                return False
             
             # Verificar si el ID del video es válido (11 caracteres)
             return bool(match) and len(match.group(2)) == 11
@@ -50,26 +54,12 @@ class Utils:
     
     @staticmethod
     def sanitize_filepath(filepath):
-        """Sanitiza rutas manteniendo la estructura de directorios"""
+        """Simplifica la sanitización de rutas usando la función nativa de yt‑dlp."""
         try:
-            # Preservar barras en la ruta
-            cleaned = re.sub(r'[<>"|?*\x00-\x1F]', '', filepath)  # No eliminar '/' ni '\'
-            
-            # Decodificar URL encoding conservando la estructura
-            decoded = unquote(cleaned)
-            
-            # Normalización avanzada de rutas
-            normalized = os.path.normpath(decoded)
-            
-            # Resolver rutas sin verificar existencia
-            resolved = str(Path(normalized).resolve(strict=False))
-            
-            # Limitar longitud y mantener codificación
-            max_length = 260 if sys.platform == "win32" else 4096
-            return resolved[:max_length]
-            
+            # Se delega a sanitize_path para normalizar y limpiar la ruta
+            return sanitize_path(filepath)
         except Exception as e:
-            logger.error(f"Error sanitizando ruta: {str(e)}")
+            logger.error(f"Error sanitizando ruta con sanitize_path: {str(e)}")
             return None
         
     @staticmethod

@@ -152,7 +152,7 @@ class YouTubeDownloader(QWidget):
         return status_label
     
     def create_version_label(self):
-        version_label = QLabel("Versión: 1.0.4")
+        version_label = QLabel("Versión: 1.0.7")
         version_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         version_label.setStyleSheet("color: #888888; font-size: 10px;")
         return version_label
@@ -232,17 +232,19 @@ class YouTubeDownloader(QWidget):
     def open_last_download(self):
         if self.last_download_path:
             sanitized_path = Utils.sanitize_filepath(self.last_download_path)
-            # Cambio: Si la ruta termina en '.webm', buscar el archivo '.mp3'
-            if sanitized_path.lower().endswith(".webm"):
-                mp3_path = sanitized_path[:-5] + ".mp3"
-            else:
-                mp3_path = sanitized_path
-            if os.path.exists(mp3_path):  # Verificar existencia real
+            mp3_path = self.get_mp3_path(sanitized_path)
+            if os.path.exists(mp3_path):
                 Utils.safe_open_file(mp3_path)
             else:
                 self.show_error_message("El archivo ya no existe en la ubicación original")
                 self.open_last_download_button.setEnabled(False)
                 logger.warning(f"Archivo no encontrado: {mp3_path}")
+
+    def get_mp3_path(self, path):
+        """Centraliza la lógica para obtener la ruta final, convirtiendo .webm a .mp3 si es necesario."""
+        if path.lower().endswith(".webm"):
+            return path[:-5] + ".mp3"
+        return path
 
     def start_download(self):
         url = self.url_input.text().strip()
