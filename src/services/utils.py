@@ -122,53 +122,33 @@ class Utils:
         
     @staticmethod
     def is_safe_path(path):
-        """Verifica que la ruta no esté en directorios sensibles del sistema"""
-        system_dirs = {
-            'win32': [
-                os.path.abspath('C:\\Windows'),
-                os.path.abspath('C:\\Program Files'),
-                os.path.abspath('C:\\Program Files (x86)'),
-                os.path.abspath('C:\\System Volume Information'),
-                os.path.abspath('C:\\$Recycle.Bin')
-            ],
-            'linux': [
-                '/bin',
-                '/etc',
-                '/root',
-                '/sbin',
-                '/var',
-                '/usr/lib',
-                '/sys',
-                '/proc'
-            ],
-            'darwin': [
-                '/System',
-                '/Library',
-                '/private',
-                '/sbin',
-                '/usr/lib',
-                '/var'
-            ]
-        }
-        """Verifica que la ruta no esté en directorios sensibles del sistema"""
+        # Verifica que la ruta no esté en directorios sensibles del sistema
         try:
-            # Normalización case-insensitive solo para Windows
             abs_path = os.path.abspath(path)
             normalized = os.path.normpath(abs_path)
             if sys.platform == "win32":
                 normalized = normalized.lower()
-
-            forbidden_dirs = [os.path.normpath(d).lower() if sys.platform == "win32" 
-                            else os.path.normpath(d) 
-                            for d in system_dirs.get(sys.platform, [])]
-
+            forbidden_dirs = [os.path.normpath(d).lower() if sys.platform == "win32" else os.path.normpath(d)
+                              for d in {
+                                  'win32': [
+                                      os.path.abspath('C:\\Windows'),
+                                      os.path.abspath('C:\\Program Files'),
+                                      os.path.abspath('C:\\Program Files (x86)'),
+                                      os.path.abspath('C:\\System Volume Information'),
+                                      os.path.abspath('C:\\$Recycle.Bin')
+                                  ],
+                                  'linux': [
+                                      '/bin', '/etc', '/root', '/sbin', '/var', '/usr/lib', '/sys', '/proc'
+                                  ],
+                                  'darwin': [
+                                      '/System', '/Library', '/private', '/sbin', '/usr/lib', '/var'
+                                  ]
+                              }.get(sys.platform, [])]
             for forbidden in forbidden_dirs:
                 if normalized.startswith(forbidden):
                     logger.warning(f"Intento de acceso a directorio prohibido: {normalized}")
                     return False
-
             return True
-
         except Exception as e:
             logger.error(f"Error validando ruta: {str(e)}")
             return False

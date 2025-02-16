@@ -36,22 +36,38 @@ class YouTubeDownloader(QWidget):
         self.title_label = self.create_title_label()
         self.url_input = self.create_url_input()
         self.options_layout = self.create_options_layout()
-        self.buttons_layout = self.create_buttons_layout()
-        self.open_last_download_button = self.create_open_last_download_button()
-        self.progress_bar = self.create_progress_bar()
-        self.status_label = self.create_status_label()
-
+        
+        self.download_button = self.create_button("Descargar", Config.ICON_DOWNLOAD, self.start_download, "download_button")
+        self.cancel_button = self.create_button("Cancelar", Config.ICON_CANCEL, self.cancel_download, "cancel_button", enabled=False)
+        self.open_last_download_button = self.create_button("Abrir última descarga", Config.ICON_FOLDER, self.open_last_download, "open_last_download_button", enabled=False)
+        
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addWidget(self.download_button)
+        buttons_layout.addWidget(self.cancel_button)
+        
         main_layout.addWidget(self.title_label)
         main_layout.addWidget(self.url_input)
         main_layout.addLayout(self.options_layout)
-        main_layout.addLayout(self.buttons_layout)
+        main_layout.addLayout(buttons_layout)
         main_layout.addWidget(self.open_last_download_button)
+        self.progress_bar = self.create_progress_bar()
+        self.status_label = self.create_status_label()
         main_layout.addWidget(self.progress_bar)
         main_layout.addWidget(self.status_label)
         self.version_label = self.create_version_label()
         main_layout.addWidget(self.version_label)
-
         self.setLayout(main_layout)
+
+    def create_button(self, text, icon_name, slot, object_name, enabled=True):
+        button = QPushButton(text)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setObjectName(object_name)
+        button.setIcon(QIcon(os.path.join(Config.ICON_DIR, icon_name)))
+        button.setIconSize(QSize(24, 24))
+        button.clicked.connect(slot)
+        button.setEnabled(enabled)
+        self.add_button_animation(button)
+        return button
 
     def create_title_label(self):
         title_label = QLabel("YouTube Downloader")
@@ -78,49 +94,9 @@ class YouTubeDownloader(QWidget):
         options_layout.addWidget(self.audio_only_checkbox)
         return options_layout
 
-    def create_buttons_layout(self):
-        buttons_layout = QHBoxLayout()
-        self.download_button = self.create_download_button()
-        self.cancel_button = self.create_cancel_button()
-        buttons_layout.addWidget(self.download_button)
-        buttons_layout.addWidget(self.cancel_button)
-        return buttons_layout
-
     def toggle_quality_selector(self, state):
         self.quality_combo.setEnabled(not state)
         logger.info(f"Modo solo audio {'habilitado' if state else 'deshabilitado'}")
-
-    def create_download_button(self):
-        download_button = QPushButton("Descargar")
-        download_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        download_button.setObjectName("download_button")
-        download_button.setIcon(QIcon(os.path.join(Config.ICON_DIR, Config.ICON_DOWNLOAD)))
-        download_button.setIconSize(QSize(24, 24))
-        download_button.clicked.connect(self.start_download)
-        self.add_button_animation(download_button)
-        return download_button
-
-    def create_cancel_button(self):
-        cancel_button = QPushButton("Cancelar")
-        cancel_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        cancel_button.setObjectName("cancel_button")
-        cancel_button.setIcon(QIcon(os.path.join(Config.ICON_DIR, Config.ICON_CANCEL)))
-        cancel_button.setIconSize(QSize(24, 24))
-        cancel_button.clicked.connect(self.cancel_download)
-        cancel_button.setEnabled(False)
-        self.add_button_animation(cancel_button)
-        return cancel_button
-
-    def create_open_last_download_button(self):
-        open_last_download_button = QPushButton("Abrir última descarga")
-        open_last_download_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        open_last_download_button.setObjectName("open_last_download_button")
-        open_last_download_button.setIcon(QIcon(os.path.join(Config.ICON_DIR, Config.ICON_FOLDER)))
-        open_last_download_button.setIconSize(QSize(24, 24))
-        open_last_download_button.clicked.connect(self.open_last_download)
-        open_last_download_button.setEnabled(False)
-        self.add_button_animation(open_last_download_button)
-        return open_last_download_button
 
     def add_button_animation(self, button):
         animation_group = QSequentialAnimationGroup()
@@ -152,7 +128,7 @@ class YouTubeDownloader(QWidget):
         return status_label
     
     def create_version_label(self):
-        version_label = QLabel("Versión: 1.0.7")
+        version_label = QLabel("Versión: 1.0.8")
         version_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         version_label.setStyleSheet("color: #888888; font-size: 10px;")
         return version_label

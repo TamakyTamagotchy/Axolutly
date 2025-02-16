@@ -23,13 +23,9 @@ class AnimatedProgressBar(QProgressBar):
             self._animacion.stop()
             super().setValue(valor_ajustado)
         else:
-            self._iniciar_animacion(valor_ajustado)
-
-    def _iniciar_animacion(self, valor_objetivo):
-        """Controla la lógica de la animación"""
-        self._animacion.setStartValue(self.value())
-        self._animacion.setEndValue(valor_objetivo)
-        self._animacion.start()
+            self._animacion.setStartValue(self.value())
+            self._animacion.setEndValue(valor_ajustado)
+            self._animacion.start()
 
     @pyqtSlot()
     def _ajustar_valor_final(self):
