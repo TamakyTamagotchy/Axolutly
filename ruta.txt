@@ -13,14 +13,19 @@ youtube-downloader/
 │   ├── icono_descarga
 │   └── icono_youtube
 │
+│── Registros/
+│   │   └── Registro_Youtube.txt
+│
+│
 ├── src/
 │   ├── ui/
 │   │   └── main_window.py
 │   │
 │   └── services/
+│       ├── cookies_netscape.txt
 │       ├── hilo_descarga.py
 │       └── utils.py
 │   
 |── main.py
-├── requirements.txt
+├── License
 └── README.md

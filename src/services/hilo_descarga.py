@@ -1,23 +1,19 @@
-from PyQt6.QtCore import QThread, pyqtSignal, QMutex, QWaitCondition, QMutexLocker, pyqtSlot
-from PyQt6.QtWidgets import QMessageBox
 import os
-import sys
+import time
+from PyQt6.QtCore import QThread, pyqtSignal, QMutex, QWaitCondition, QMutexLocker, pyqtSlot
 from yt_dlp import YoutubeDL
-from yt_dlp.utils.networking import std_headers
 from config.logger import logger
-from selenium.webdriver.chrome.options import Options
-from selenium import webdriver
+from src.services.gestor_cookies import GestorCookies
+from src.services.security import Security
 
 class DownloadThread(QThread):
-    
-    """ Hilo de descarga el cual se encarga de descargar un video de YouTube 
-        ya sea en video o audio."""
-        
     progress = pyqtSignal(float)
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
     video_info = pyqtSignal(dict)
     requestOverwritePermission = pyqtSignal(str)
+    showAuthDialog = pyqtSignal()
+    authenticationCompleted = pyqtSignal()
 
     def __init__(self, video_url, quality, audio_only, output_dir):
         super().__init__()
@@ -26,23 +22,49 @@ class DownloadThread(QThread):
         self.audio_only = audio_only
         self.output_dir = output_dir
         self.cancelled = False
-        self.final_filename = None  # Almacenará el nombre real del archivo
-        self.temp_file = None  # Almacenará el archivo temporal antes de conversión
+        self.final_filename = None
+        self.temp_file = None
         self.overwrite_answer = None
         self.mutex = QMutex()
         self.waitCondition = QWaitCondition()
-        
+        self.last_progress_time = 0
+        self._auth_completed = False
+        self._driver = None
+        self.cookie_manager = GestorCookies(self)
+        self.security = Security()
+
+    def set_auth_completed(self):
+        """Maneja la completación de la autenticación"""
+        self._auth_completed = True
+        if self.cookie_manager:
+            self.cookie_manager.set_auth_completed()
+        logger.info("Autenticación completada en hilo de descarga")
+
     def run(self):
         try:
+            # Validar URL antes de procesar
+            if not self.security.validate_url(self.video_url):
+                self.error.emit("URL no válida o potencialmente peligrosa")
+                return
+
             opts = self.get_ydl_options()
+            cookie_path = self.cookie_manager.get_cookie_path()
+            if cookie_path:
+                opts['cookiefile'] = cookie_path
+                logger.info(f"Usando archivo de cookies: {cookie_path}")
             with YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(self.video_url, download=False)
         except Exception as e:
             if "age" in str(e).lower() or "restricted" in str(e).lower():
                 logger.info("Restricción de edad detectada. Solicitando autenticación...")
-                self.update_cookies()
+                self.cookie_manager.update_cookies()
+                opts = self.get_ydl_options()
+                cookie_path = self.cookie_manager.get_cookie_path()
+                if (cookie_path):
+                    opts['cookiefile'] = cookie_path
+                    logger.info(f"Usando archivo de cookies tras autenticación: {cookie_path}")
                 try:
-                    with YoutubeDL(self.get_ydl_options()) as ydl:
+                    with YoutubeDL(opts) as ydl:
                         info = ydl.extract_info(self.video_url, download=False)
                 except Exception as e2:
                     logger.error(f"Error tras actualizar cookies: {e2}")
@@ -61,27 +83,61 @@ class DownloadThread(QThread):
         elif os.path.exists(temp_filename):
             os.remove(temp_filename)
         try:
-            with YoutubeDL(self.get_ydl_options()) as ydl:
+            opts = self.get_ydl_options()
+            cookie_path = self.cookie_manager.get_cookie_path()
+            if cookie_path:
+                opts['cookiefile'] = cookie_path
+            with YoutubeDL(opts) as ydl:
                 ydl.download([self.video_url])
         except Exception as e:
             self.error.emit(f"Error en la descarga: {e}")
             return
 
         if self.cancelled:
+            self.cleanup_temp_files()
             self.error.emit("Descarga cancelada por el usuario")
             return
+
         final_path = self.final_filename or temp_filename
+        if os.path.exists(temp_filename) and final_path != temp_filename:
+            try:
+                os.replace(temp_filename, final_path)
+            except Exception as rename_error:
+                logger.error(f"Error al renombrar el archivo: {rename_error}")
+                self.error.emit("Error interno al procesar la descarga")
+                return
+
+        if self.audio_only and final_path.lower().endswith(".webm"):
+            final_path = final_path[:-5] + ".mp3"
+
         self.finished.emit(final_path)
         logger.info(f"Descarga completada: {'solo audio' if self.audio_only else f'{self.quality}p'}")
 
-    def ask_overwrite_permission(self, file_name):
-        self.overwrite_answer = None
-        self.requestOverwritePermission.emit(file_name)
+    def cleanup_temp_files(self):
+        if self.temp_file and os.path.exists(self.temp_file):
+            try:
+                os.remove(self.temp_file)
+                logger.info(f"Archivo temporal eliminado: {self.temp_file}")
+            except Exception as e:
+                logger.error(f"Error al eliminar el archivo temporal {self.temp_file}: {str(e)}")
+
+    def ask_overwrite_permission(self, file_path):
+        exists, similar_files = self.cookie_manager.check_file_exists(file_path)
+        if not exists:
+            return True
+
+        message = f"El archivo '{os.path.basename(file_path)}' ya existe."
+        if similar_files:
+            message += "\nAdemás, se encontraron archivos con contenido idéntico:\n"
+            message += "\n".join(f"- {f}" for f in similar_files)
+        
+        self.requestOverwritePermission.emit(message)
+        
         with QMutexLocker(self.mutex):
             waited = self.waitCondition.wait(self.mutex, 10000)
             if not waited or self.overwrite_answer is None:
-                logger.error("Timeout esperando confirmación de sobrescritura; se asume 'No'.")
-                self.overwrite_answer = False
+                logger.warning("Timeout en confirmación de sobrescritura")
+                return False
         return self.overwrite_answer
 
     @pyqtSlot(bool)
@@ -92,15 +148,37 @@ class DownloadThread(QThread):
 
     def cancel(self):
         self.cancelled = True
+        if self._driver:
+            try:
+                self._driver.quit()
+            except:
+                pass
+            self._driver = None
         self.quit()
             
     def get_ydl_options(self):
         opts = {
-            'outtmpl': os.path.join(self.output_dir, '%(title)s.%(ext)s'),
+            'outtmpl': os.path.join(
+                self.output_dir, 
+                self.security.sanitize_filename('%(title)s.%(ext)s')
+            ),
             'progress_hooks': [self.progress_hook],
             'noplaylist': True,
-            'retries': 5,
-            'http_headers': std_headers,
+            'retries': 3,
+            'http_headers': {
+                'User-Agent': 'YouTube Downloader v1.1.0',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'es-ES,es;q=0.8,en-US;q=0.5,en;q=0.3',
+            },
+            'nocheckcertificate': False,
+            'socket_timeout': 30,
+            'restrict_filenames': True,
+            'no_color': True,
+            'geo_bypass': False,
+            'no_warnings': True,
+            'quiet': True,
+            'extract_flat': "in_playlist",
+            'source_address': '0.0.0.0'
         }
         if self.audio_only:
             opts.update({
@@ -120,23 +198,13 @@ class DownloadThread(QThread):
                 'merge_output_format': 'mp4',
                 'format_sort': ['height', 'vcodec:h264', 'filesize', 'ext'],
             })
-        
-        # Usar sys._MEIPASS cuando se ejecute como exe
-        if hasattr(sys, '_MEIPASS'):
-            base_path = sys._MEIPASS
-        else:
-            base_path = os.path.abspath(os.path.dirname(__file__))
-        
-        for f in os.listdir(base_path):
-            if f.lower() == "cookies.txt":
-                netscape_path = os.path.join(base_path, f)
-                opts['cookiefile'] = netscape_path
-                logger.info(f"Cookie file detectado: {netscape_path}")
-                break
-
         return opts
 
     def progress_hook(self, d):
+        now = time.time()
+        if now - self.last_progress_time < 0.5:
+            return
+        self.last_progress_time = now
         if self.cancelled:
             raise Exception("Descarga cancelada por el usuario")
         if d['status'] == 'downloading':
@@ -155,53 +223,3 @@ class DownloadThread(QThread):
             self.progress.emit(100)
             self.final_filename = d['info_dict']['_filename']
             logger.info(f"Archivo final: {self.final_filename}")
-
-    def update_cookies(self):
-        """Actualiza cookies.txt iniciando sesión en YouTube usando Brave.
-            Se guarda la sesión para las posteriores descargas."""
-        logger.info("Iniciando proceso de actualización de sesión...")
-        base_path = os.path.abspath(os.path.dirname(__file__))
-        cookie_filepath = os.path.join(base_path, "cookies.txt")
-        if os.path.exists(cookie_filepath):
-            logger.info("Sesión detectada. Se usarán las cookies almacenadas.")
-        else:
-            logger.info("No se detectaron cookies previas. Creando nuevo archivo de cookies.")
-
-        logger.info("Abriendo navegador Brave para autenticación...")
-        options = Options()
-        BRAVE_PATH = "C:/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe"
-        options.binary_location = BRAVE_PATH
-        options.add_argument("--ignore-certificate-errors")
-        options.add_argument("--disable-blink-features=AutomationControlled")
-        options.add_argument("--disable-bluetooth")
-        options.add_argument("--log-level=3")
-        options.add_experimental_option("excludeSwitches", ["enable-logging"])
-
-        # Se elimina el uso de ChromeDriverManager
-        driver = webdriver.Chrome(options=options)
-        driver.get("https://accounts.google.com/signin/v2/identifier?service=youtube")
-        
-        # Mostrar mensaje directo al usuario utilizando un QMessageBox
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Icon.Information)
-        msg.setWindowTitle("Autenticación requerida")
-        msg.setText("Inicie sesión en YouTube en la ventana del navegador y luego haga clic en OK cuando haya finalizado la autenticación.")
-        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
-        msg.exec()
-
-        cookies = driver.get_cookies()
-        cookie_lines = ["# Netscape HTTP Cookie File"]
-        for cookie in cookies:
-            domain = cookie.get("domain", "")
-            flag = "TRUE" if domain.startswith('.') else "FALSE"
-            path = cookie.get("path", "/")
-            secure = "TRUE" if cookie.get("secure", False) else "FALSE"
-            expiry = cookie.get("expiry", 0)
-            name = cookie.get("name", "")
-            value = cookie.get("value", "")
-            cookie_lines.append(f"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}")
-
-        with open(cookie_filepath, "w", encoding="utf-8") as f:
-            f.write("\n".join(cookie_lines))
-        logger.info(f"Cookies actualizadas: {cookie_filepath}")
-        driver.quit()
