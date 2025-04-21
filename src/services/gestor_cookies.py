@@ -49,46 +49,17 @@ class GestorCookies:
 
     def update_cookies(self):
         logger.info("Iniciando actualización de cookies...")
-        
-        # Limitar el acceso a directorios seguros
+
         cookie_dir = os.path.join(os.path.dirname(__file__), "cookies")
         if not os.path.exists(cookie_dir):
             os.makedirs(cookie_dir, mode=0o700)
-
-        # Usar opciones de navegador más seguras
-        options = Options()
-        options.add_argument("--disable-gpu")
-        options.add_argument("--disable-software-rasterizer")
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-infobars")
-        options.add_argument("--disable-notifications")
-        options.add_argument("--disable-popup-blocking")
-        options.add_argument("--disable-extensions")
-        options.add_argument("--disable-default-apps")
-        options.add_argument("--disable-background-networking")
-        options.add_argument("--metrics-recording-only")
-        options.add_argument("--no-first-run")
-        options.add_argument("--no-default-browser-check")
-        options.add_argument(f"--user-agent=YouTube Downloader v1.1.0")
-        
-        # Limitar permisos del navegador
-        options.add_argument("--deny-permission-prompts")
-        options.add_argument("--disable-permissions-api")
-        
-        # Evitar comportamientos sospechosos
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option("useAutomationExtension", False)
-
-        try:
-            os.chmod(cookie_dir, 0o700)
-        except Exception as e:
-            logger.warning(f"No se pudieron establecer permisos restrictivos al directorio de cookies: {e}")
 
         cookie_path = os.path.join(cookie_dir, "youtube_cookies.txt")
         if not Utils.is_safe_path(cookie_path):
             logger.error("Ruta de cookies no segura, abortando actualización de cookies.")
             raise Exception("Ruta de cookies no segura")
 
+        # Si ya existen cookies válidas, simplemente las reutilizamos y NO usamos Selenium
         if os.path.exists(cookie_path):
             try:
                 if os.path.getsize(cookie_path) > 0:
@@ -97,6 +68,7 @@ class GestorCookies:
             except Exception as e:
                 logger.warning(f"No se pudo verificar el archivo de cookies existente: {e}")
 
+        # Intentar obtener cookies del navegador (browser_cookie3)
         cookies = self.get_browser_cookies()
         if cookies:
             if self.create_cookie_file(cookies, cookie_path):
@@ -107,6 +79,7 @@ class GestorCookies:
                 logger.info("Cookies actualizadas exitosamente")
                 return cookie_path
 
+        # Solo si no hay cookies válidas, usar Selenium como último recurso
         try:
             logger.info("Iniciando proceso de autenticación con Selenium...")
             options = Options()
@@ -119,7 +92,7 @@ class GestorCookies:
             # Eliminar comportamientos sospechosos
             options.add_argument("--disable-gpu")
             options.add_argument("--no-sandbox")
-            options.add_argument("--window-size=1280,720")
+            options.add_argument("--window-size=360,720")
             options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--disable-extensions")
             options.add_argument(f"--user-agent=YouTube Downloader v1.0.8")
@@ -176,17 +149,48 @@ class GestorCookies:
         return cookie_path
 
     def _get_preferred_browser_path(self):
-        browsers = {
-            "brave": "C:/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe",
-            "chrome": "C:/Program Files/Google/Chrome/Application/chrome.exe",
-            "edge": "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
-        }
-        
-        browser_preference = self.settings.get('browser_preference', [])
-        for browser in browser_preference:
-            if browser in browsers and os.path.exists(browsers[browser]):
-                return browsers[browser]
-        return None
+        """Obtiene la ruta del navegador preferido de manera segura usando el registro de Windows"""
+        try:
+            import winreg
+            browser_paths = {}
+            
+            # Definir las claves del registro para cada navegador
+            browser_registry = {
+                'chrome': r'Software\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe',
+                'firefox': r'Software\Microsoft\Windows\CurrentVersion\App Paths\firefox.exe',
+                'edge': r'Software\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe',
+                'brave': r'Software\Microsoft\Windows\CurrentVersion\App Paths\brave.exe'
+            }
+            
+            # Buscar navegadores instalados en el registro
+            for browser, reg_path in browser_registry.items():
+                try:
+                    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path) as key:
+                        path = winreg.QueryValue(key, None)
+                        if path and os.path.exists(path):
+                            browser_paths[browser] = path
+                except WindowsError:
+                    continue
+                    
+            # Usar la preferencia del usuario si está disponible y el navegador existe
+            browser_preference = self.settings.get('browser_preference', [])
+            for browser in browser_preference:
+                if browser in browser_paths:
+                    logger.info(f"Usando navegador preferido: {browser}")
+                    return browser_paths[browser]
+                    
+            # Si no se encuentra ningún navegador preferido, usar el primero disponible
+            if browser_paths:
+                browser, path = next(iter(browser_paths.items()))
+                logger.info(f"Usando navegador disponible: {browser}")
+                return path
+                
+            logger.warning("No se encontraron navegadores instalados")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error al buscar navegadores: {e}")
+            return None
 
     def set_auth_completed(self):
         """Marca la autenticación como completada"""
@@ -202,24 +206,54 @@ class GestorCookies:
         browser_preference = self.settings.get('browser_preference', 
             ["chrome", "firefox", "brave", "edge"])
         
-        browser_map = {
-            "chrome": browser_cookie3.chrome,
-            "firefox": browser_cookie3.firefox,
-            "brave": browser_cookie3.brave,
-            "edge": browser_cookie3.edge
-        }
-        
+        # Validar que browser_cookie3 esté disponible de manera segura
+        try:
+            browser_map = {
+                "chrome": (browser_cookie3.chrome, "Chrome"),
+                "firefox": (browser_cookie3.firefox, "Firefox"),
+                "brave": (browser_cookie3.brave, "Brave"),
+                "edge": (browser_cookie3.edge, "Edge")
+            }
+        except Exception as e:
+            logger.error(f"Error al inicializar mapeado de navegadores: {e}")
+            return cookies
+
         for browser_name in browser_preference:
             if browser_name in browser_map:
                 try:
-                    browser_cookies = browser_map[browser_name](domain_name="youtube.com")
-                    if browser_cookies:
-                        cookies.extend(browser_cookies)
-                        logger.info(f"Cookies obtenidas de {browser_name}")
-                        break  # Usa el primer navegador exitoso
+                    browser_func, display_name = browser_map[browser_name]
+                    # Usar un timeout para prevenir bloqueos
+                    import threading
+                    cookie_event = threading.Event()
+                    cookie_result = []
+
+                    def get_cookies():
+                        try:
+                            result = browser_func(domain_name="youtube.com")
+                            if result:
+                                cookie_result.extend(result)
+                            cookie_event.set()
+                        except Exception as e:
+                            logger.debug(f"Error obteniendo cookies de {display_name}: {e}")
+                            cookie_event.set()
+
+                    cookie_thread = threading.Thread(target=get_cookies)
+                    cookie_thread.daemon = True
+                    cookie_thread.start()
+
+                    # Esperar máximo 5 segundos
+                    if cookie_event.wait(timeout=5.0):
+                        if cookie_result:
+                            cookies.extend(cookie_result)
+                            logger.info(f"Cookies obtenidas de {display_name}")
+                            break
+                    else:
+                        logger.warning(f"Timeout obteniendo cookies de {display_name}")
+
                 except Exception as e:
-                    logger.debug(f"No se pudieron obtener cookies de {browser_name}: {e}")
-        
+                    logger.debug(f"No se pudieron obtener cookies de {display_name}: {e}")
+                    continue
+
         return cookies
 
     def create_cookie_file(self, cookies, cookie_path):

@@ -57,10 +57,10 @@ class DownloadThread(QThread):
         except Exception as e:
             if "age" in str(e).lower() or "restricted" in str(e).lower():
                 logger.info("Restricción de edad detectada. Solicitando autenticación...")
-                self.cookie_manager.update_cookies()
+                # Solo aquí se llama a update_cookies (que puede usar Selenium)
+                cookie_path = self.cookie_manager.update_cookies()
                 opts = self.get_ydl_options()
-                cookie_path = self.cookie_manager.get_cookie_path()
-                if (cookie_path):
+                if cookie_path:
                     opts['cookiefile'] = cookie_path
                     logger.info(f"Usando archivo de cookies tras autenticación: {cookie_path}")
                 try:

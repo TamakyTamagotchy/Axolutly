@@ -1,7 +1,6 @@
 from PyQt6.QtWidgets import (QApplication, QWidget, QPushButton, QLabel, QVBoxLayout, QHBoxLayout,
                             QLineEdit, QCheckBox, QComboBox, QFileDialog, QMessageBox)
-from PyQt6.QtCore import (Qt, QSize, QPropertyAnimation, 
-                        QSequentialAnimationGroup, QPauseAnimation, QEasingCurve)
+from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QSequentialAnimationGroup, QPauseAnimation, QEasingCurve
 from PyQt6.QtGui import QIcon
 import os
 from Animation.Animation import AnimatedProgressBar

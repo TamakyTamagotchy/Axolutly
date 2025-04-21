@@ -48,14 +48,14 @@ class Utils:
                 logger.warning(f"Ruta no existe o no válida: {safe_path}")
                 return False
 
-            # Usar métodos más seguros para abrir archivos
+            # Usar métodos estándar para abrir archivos según el sistema operativo
             if sys.platform == "win32":
-                subprocess.run(['start', '', safe_path], shell=True, check=True)
+                os.startfile(safe_path)
             elif sys.platform == "darwin":
                 subprocess.run(['open', safe_path], check=True)
             else:
                 subprocess.run(['xdg-open', safe_path], check=True)
-            
+
             return True
         except Exception as e:
             logger.error(f"Error abriendo archivo: {str(e)}")
