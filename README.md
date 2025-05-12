@@ -28,14 +28,14 @@ Axolutly es una herramienta moderna y potente para descargar videos de YouTube e
 4. Selecciona la calidad y formato en cual prefieras descargar (video y/o audio).
 5. ¡Disfruta de tus videos o audios con máxima calidad!
 
-## Innovación y Seguridad
+## Seguridad
 Axolutly utiliza tecnología de vanguardia para garantizar:
 - **Descargas Seguras**: Validación y sanitización de URLs y rutas, y protección contra accesos no autorizados.
 - **Privacidad**: Gestión y cifrado de cookies y datos sensibles.
 - **Eficiencia**: Procesos optimizados para realizar descargas rápidas y sin errores.
 
 ## Contribuciones y Soporte
-No es necesario clonar el repositorio para instalar y usar la aplicación. Sin embargo, tus comentarios y sugerencias son siempre bienvenidos para seguir mejorando la herramienta.
+Tus comentarios y sugerencias son siempre bienvenidos para seguir mejorando la herramienta.
 
 ## Licencia
 Este proyecto está bajo la [Licencia GNU](LICENSE).
