@@ -1,43 +1,41 @@
-# YouTube Downloader
+# Axolutly
 
 ## Descripción
-Aplicación de escritorio para descargar videos y audio de YouTube. Incluye conversión a MP3 y permite la descarga de videos con restricciones (por ejemplo, verificación de edad) mediante el uso de cookies.
+Axolutly es una herramienta moderna y potente para descargar videos de YouTube en su máxima calidad. Con una interfaz de escritorio en PyQt6 y soporte para autenticación segura, esta aplicación está diseñada para ofrecer una experiencia sencilla, rápida y confiable.
 
-## Características
-- Descarga de videos en diferentes calidades (2160p, 1440p, 1080p, etc.)
-- Opción para extraer solo audio (MP3)
-- Soporte para videos con restricciones mediante autenticación con cookies
-- Interfaz intuitiva y registro de descargas
+## Descargas Disponibles
+- **Instalador MSI**: La forma más fácil de instalar la aplicación en Windows.
+- **Archivo RAR**: Incluye todos los archivos y recursos necesarios para usuarios avanzados o para realizar actualizaciones manuales.
 
-## Requisitos y Configuración
-- Python 3.7 o superior.
-- Dependencias listadas en `requirements.txt`.
-- Para descargar videos restringidos, exporta las cookies de YouTube en formato Netscape usando una extensión de terceros (por ejemplo, [EditThisCookie](https://www.editthiscookie.com/)) y guarda el archivo (por defecto, `cookies.txt`) en el directorio `Config`.
+## Características Principales
+- Descarga videos en múltiples calidades, ¡hasta 4K!
+- Extracción de audio en MP3 de forma directa.
+- Soporte para contenido con restricciones de edad a través de autenticación segura.
+- Gestión automatizada y encriptada de cookies.
+- Interfaz de escritorio nativa y experiencia web optimizada.
+- Modos de tema claro/oscuro para adaptarse a tus preferencias.
+- Notificaciones en tiempo real del progreso de la descarga.
 
-## Instalación
+## Requisitos
+- Windows 10 o superior.
+- Navegador moderno para la autenticación de YouTube.
+- Conexión a Internet estable.
 
-1. Clonar el repositorio:
+## Cómo Usarlo
+1. Descarga e instala el MSI o extrae el contenido del RAR.
+2. Inicia la aplicación.
+3. Ingresa la URL del video de YouTube.
+4. Selecciona la calidad y formato en cual prefieras descargar (video y/o audio).
+5. ¡Disfruta de tus videos o audios con máxima calidad!
 
-git clone https://github.com/tu-usuario/youtube-downloader.git cd youtube-downloader
+## Innovación y Seguridad
+Axolutly utiliza tecnología de vanguardia para garantizar:
+- **Descargas Seguras**: Validación y sanitización de URLs y rutas, y protección contra accesos no autorizados.
+- **Privacidad**: Gestión y cifrado de cookies y datos sensibles.
+- **Eficiencia**: Procesos optimizados para realizar descargas rápidas y sin errores.
 
-2. Crear entorno virtual
+## Contribuciones y Soporte
+No es necesario clonar el repositorio para instalar y usar la aplicación. Sin embargo, tus comentarios y sugerencias son siempre bienvenidos para seguir mejorando la herramienta.
 
-python -m venv venv source venv/bin/activate 
-
-# En Windows: 
-
-venv\Scripts\activate
-
-3. Instalar dependencias
-
-pip install -r requirements.txt
-
-4. Ejecutar la aplicación:
-
-python -m src.main
-
-Contribuciones
-Las contribuciones son bienvenidas. Por favor, lee las guías de contribución.
-
-Licencia
-Este proyecto está bajo la licencia MIT. Consulta el archivo `LICENSE` para obtener más información
+## Licencia
+Este proyecto está bajo la [Licencia GNU](LICENSE).
