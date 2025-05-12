@@ -3,6 +3,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QPushButton, QLabel, QVBoxLa
 from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QSequentialAnimationGroup, QPauseAnimation, QEasingCurve
 from PyQt6.QtGui import QIcon
 import os
+import sys
 from Animation.Animation import AnimatedProgressBar
 from config.logger import logger
 from config.logger import Config
@@ -25,7 +26,12 @@ class YouTubeDownloader(QWidget):
     def init_ui(self):
         self.setWindowTitle('YouTube Downloader')
         self.setGeometry(100, 100, 600, 500)
-        self.setWindowIcon(QIcon(os.path.join(Config.ICON_DIR, Config.ICON_YOUTUBE)))
+        # Ajustar ruta de iconos para PyInstaller/cx_Freeze
+        icon_dir = Config.ICON_DIR
+        if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+            icon_dir = os.path.join(sys._MEIPASS, "icons")
+        self.setWindowIcon(QIcon(os.path.join(icon_dir, Config.ICON_YOUTUBE)))
+        self.icon_dir = icon_dir  # Guardar para uso en create_button
         self.setup_ui_components()
         self.apply_styles()
         self.center_on_screen()
@@ -66,7 +72,8 @@ class YouTubeDownloader(QWidget):
         button = QPushButton(text)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setObjectName(object_name)
-        button.setIcon(QIcon(os.path.join(Config.ICON_DIR, icon_name)))
+        # Usar self.icon_dir para iconos
+        button.setIcon(QIcon(os.path.join(self.icon_dir, icon_name)))
         button.setIconSize(QSize(24, 24))
         button.clicked.connect(slot)
         button.setEnabled(enabled)
@@ -267,6 +274,21 @@ class YouTubeDownloader(QWidget):
                     background-color: #ff5252;
                     color: white;
                 }
+                /* Agregamos estilos para el botón de "Abrir última descarga" */
+                QPushButton#open_last_download_button {
+                    background-color: #ffab40;
+                    color: white;
+                }
+                QPushButton#open_last_download_button:enabled {
+                    background-color: #ffab40;
+                    color: white;
+                }
+                QPushButton#open_last_download_button:hover:enabled {
+                    background-color: #ffa000;
+                }
+                QPushButton#open_last_download_button:pressed:enabled {
+                    background-color: #ff8f00;
+                }
                 QPushButton#theme_button {
                     background-color: #333333;
                     border-radius: 20px;
@@ -340,15 +362,15 @@ class YouTubeDownloader(QWidget):
                 QPushButton#open_last_download_button:enabled { background-color: #ff9500; color: white;}
                 QPushButton#open_last_download_button:hover:enabled { background-color: #cc7a00; }
                 QPushButton#open_last_download_button:pressed:enabled { background-color: #995c00; }
-                QProgressBar { border: 2px solid #e0e0e0; border-radius: 8px; text-align: center; height: 30px;background-color: #f0f0f0;}
-                QProgressBar::chunk {background-color: #007aff; border-radius: 6px;}
-                QCheckBox {font-size: 16px;}
-                QCheckBox::indicator {width: 20px; height: 20px; }
                 QPushButton#theme_button {background-color: #e0e0e0; border-radius: 20px; padding: 5px; font-size: 18px; min-width: 40px; min-height: 40px; border: none; outline: none;}
                 QPushButton#theme_button:hover {background-color: #d0d0d0; border-radius: 20px;}
                 QPushButton#theme_button:pressed {background-color: #c0c0c0; border-radius: 20px;}
                 QPushButton#theme_button:focus {border: none; outline: none; border-radius: 20px;}
                 QPushButton#theme_button:focus:!pressed {background-color: #e0e0e0; border-radius: 20px;}
+                QProgressBar { border: 2px solid #e0e0e0; border-radius: 8px; text-align: center; height: 30px;background-color: #f0f0f0;}
+                QProgressBar::chunk {background-color: #007aff; border-radius: 6px;}
+                QCheckBox {font-size: 16px;}
+                QCheckBox::indicator {width: 20px; height: 20px; }
             """)
         logger.debug(f"Estilo {'oscuro' if self.dark_mode else 'claro'} aplicado")
 

@@ -1,9 +1,13 @@
 import os
+import sys
 import logging
 from logging.handlers import RotatingFileHandler
 
 class Config:
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if getattr(sys, 'frozen', False):
+        # Si está congelado, usar la ruta del ejecutable
+        BASE_DIR = os.path.dirname(sys.executable)
     DIR_LOGS = os.path.join(BASE_DIR, "Registros")
     LOG_FILE = "Registro_Youtube.log"
     ERROR_LOG_FILE = "errores_youtube.log"
@@ -24,18 +28,6 @@ def configure_logger():
     
     # Asegurarse de que el directorio de logs existe
     os.makedirs(Config.DIR_LOGS, exist_ok=True)
-    
-    # Handler para todos los logs
-    main_handler = RotatingFileHandler(
-        os.path.join(Config.DIR_LOGS, Config.LOG_FILE),
-        maxBytes=Config.MAX_LOG_SIZE,
-        backupCount=Config.NUM_LOG_BACKUPS,
-        encoding='utf-8'
-    )
-    main_handler.setFormatter(logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(message)s'
-    ))
-    main_handler.setLevel(logging.INFO)
     
     # Handler específico para errores
     error_handler = RotatingFileHandler(
@@ -64,7 +56,6 @@ def configure_logger():
         debug_handler.setLevel(logging.DEBUG)
         logger.addHandler(debug_handler)
     
-    logger.addHandler(main_handler)
     logger.addHandler(error_handler)
     
     return logger

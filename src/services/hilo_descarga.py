@@ -189,12 +189,14 @@ class DownloadThread(QThread):
                 }]
             })
         else:
+            # Solo usar ffmpeg si es necesario para convertir a mp4 (cuando el formato no es mp4)
             opts.update({
                 'format': f'bestvideo[height<={self.quality}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                'postprocessors': [{
-                    'key': 'FFmpegVideoConvertor',
-                    'preferedformat': 'mp4'
-                }],
+                # Eliminar postprocesador de video innecesario
+                # 'postprocessors': [{
+                #     'key': 'FFmpegVideoConvertor',
+                #     'preferedformat': 'mp4'
+                # }],
                 'merge_output_format': 'mp4',
                 'format_sort': ['height', 'vcodec:h264', 'filesize', 'ext'],
             })
