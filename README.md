@@ -7,6 +7,11 @@ Axolutly es una herramienta moderna y potente para descargar videos de YouTube e
 - **Instalador MSI**: La forma más fácil de instalar la aplicación en Windows.
 - **Archivo RAR**: Incluye todos los archivos y recursos necesarios para usuarios avanzados o para realizar actualizaciones manuales.
 
+## Requerimentos
+- Necesitas instalar por el momento **FFMPEG** para mas seguridad la ultima version de este programa.
+- Añadir este archivo al PATH.
+- Si no sabes como realizarlo busca un tutorial en youtube para agregar programas en el PATH.
+
 ## Características Principales
 - Descarga videos en múltiples calidades, ¡hasta 4K!
 - Extracción de audio en MP3 de forma directa.
@@ -30,7 +35,7 @@ Axolutly es una herramienta moderna y potente para descargar videos de YouTube e
 
 ## Seguridad
 Axolutly utiliza tecnología de vanguardia para garantizar:
-- **Descargas Seguras**: Validación de URLs y rutas, protección contra accesos no autorizados.
+- **Seguridad**: Validación de URLs y rutas, protección contra accesos no autorizados.
 - **Privacidad**: Gestión y cifrado de cookies y datos sensibles.
 - **Eficiencia**: Procesos optimizados para realizar descargas rápidas y sin errores.
 
