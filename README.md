@@ -1,7 +1,7 @@
 # Axolutly
 
 ## Descripción
-Axolutly es una herramienta moderna y potente para descargar videos de YouTube en su máxima calidad. Con una interfaz de escritorio en PyQt6 y soporte para autenticación segura, esta aplicación está diseñada para ofrecer una experiencia sencilla, rápida y confiable.
+Axolutly es una herramienta moderna y potente para descargar videos de YouTube en su máxima calidad. Con una interfaz de escritorio y soporte para autenticación segura, esta aplicación está diseñada para ofrecer una experiencia sencilla, rápida y confiable.
 
 ## Descargas Disponibles
 - **Instalador MSI**: La forma más fácil de instalar la aplicación en Windows.
