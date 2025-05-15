@@ -189,17 +189,27 @@ class DownloadThread(QThread):
                 }]
             })
         else:
-            # Solo usar ffmpeg si es necesario para convertir a mp4 (cuando el formato no es mp4)
             opts.update({
                 'format': f'bestvideo[height<={self.quality}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                # Eliminar postprocesador de video innecesario
-                # 'postprocessors': [{
-                #     'key': 'FFmpegVideoConvertor',
-                #     'preferedformat': 'mp4'
-                # }],
                 'merge_output_format': 'mp4',
                 'format_sort': ['height', 'vcodec:h264', 'filesize', 'ext'],
             })
+        # Usar la variable de entorno FFMPEG_LOCATION si está disponible
+        ffmpeg_base = os.environ.get("FFMPEG_LOCATION")
+        if ffmpeg_base and os.path.isdir(ffmpeg_base):
+            if os.name == "nt":
+                ffmpeg_exe = os.path.join(ffmpeg_base, "ffmpeg.exe")
+                ffprobe_exe = os.path.join(ffmpeg_base, "ffprobe.exe")
+            else:
+                ffmpeg_exe = os.path.join(ffmpeg_base, "ffmpeg")
+                ffprobe_exe = os.path.join(ffmpeg_base, "ffprobe")
+            if os.path.isfile(ffmpeg_exe) and os.path.isfile(ffprobe_exe):
+                opts['ffmpeg_location'] = ffmpeg_base
+            else:
+                opts['ffmpeg_location'] = ffmpeg_exe
+        else:
+            opts['ffmpeg_location'] = ""
+
         return opts
 
     def progress_hook(self, d):

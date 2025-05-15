@@ -90,7 +90,7 @@ class YouTubeDownloader(QWidget):
         url_input = QLineEdit()
         url_input.setPlaceholderText("Ingrese la URL del video de YouTube")
         return url_input
-    
+
     def save_quality_preference(self, quality_text):
         # Extraer solo la parte numérica (por ejemplo, "1080p" de "1080p (FHD)")
         quality = quality_text.split(' ')[0]  # Obtiene "1080p"

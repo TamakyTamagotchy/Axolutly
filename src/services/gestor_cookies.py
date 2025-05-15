@@ -3,7 +3,6 @@ import time
 import browser_cookie3
 import hashlib
 from config.logger import logger
-from selenium.webdriver.chrome.options import Options
 from selenium import webdriver
 from src.services.utils import Utils
 from config.settings import Settings
@@ -82,22 +81,74 @@ class GestorCookies:
         # Solo si no hay cookies válidas, usar Selenium como último recurso
         try:
             logger.info("Iniciando proceso de autenticación con Selenium...")
-            options = Options()
-            options.add_argument("--enable-unsafe-swiftshader")
-            options.add_argument("--disable-gpu")
-            browser_path = self._get_preferred_browser_path()
-            if browser_path:
+            browser_info = self._get_preferred_browser_path()
+            if not browser_info:
+                raise Exception("No se encontró un navegador compatible para la autenticación")
+            browser_name, browser_path = browser_info
+
+            # Prioridad: Chrome/Brave/Firefox/Opera, Edge solo si no hay otro
+            if browser_name in ["chrome", "brave"]:
+                from selenium.webdriver.chrome.options import Options
+                options = Options()
+                options.add_argument("--enable-unsafe-swiftshader")
+                options.add_argument("--disable-gpu")
+                options.add_argument("--no-sandbox")
+                options.add_argument("--window-size=360,720")
+                options.add_argument("--disable-dev-shm-usage")
+                options.add_argument("--disable-extensions")
+                options.add_argument(f"--user-agent=YouTube Downloader v1.1.0")
                 options.binary_location = browser_path
-            
-            # Eliminar comportamientos sospechosos
-            options.add_argument("--disable-gpu")
-            options.add_argument("--no-sandbox")
-            options.add_argument("--window-size=360,720")
-            options.add_argument("--disable-dev-shm-usage")
-            options.add_argument("--disable-extensions")
-            options.add_argument(f"--user-agent=YouTube Downloader v1.0.8")
-            
-            self._driver = webdriver.Chrome(options=options)
+                self._driver = webdriver.Chrome(options=options)
+            elif browser_name == "firefox":
+                from selenium.webdriver.firefox.options import Options as FirefoxOptions
+                from selenium.webdriver.firefox.service import Service as FirefoxService
+                from webdriver_manager.firefox import GeckoDriverManager
+                firefox_options = FirefoxOptions()
+                firefox_options.binary_location = browser_path
+                firefox_options.add_argument("--disable-gpu")
+                firefox_service = FirefoxService(executable_path=GeckoDriverManager().install())
+                self._driver = webdriver.Firefox(options=firefox_options, service=firefox_service)
+            elif browser_name == "opera":
+                from selenium.webdriver.chrome.options import Options
+                from selenium.webdriver.chrome.service import Service as ChromeService
+                from webdriver_manager.opera import OperaDriverManager
+                options = Options()
+                options.add_argument("--enable-unsafe-swiftshader")
+                options.add_argument("--disable-gpu")
+                options.add_argument("--no-sandbox")
+                options.add_argument("--window-size=360,720")
+                options.add_argument("--disable-dev-shm-usage")
+                options.add_argument("--disable-extensions")
+                options.add_argument(f"--user-agent=YouTube Downloader v1.1.0")
+                options.binary_location = browser_path
+                # OperaDriverManager instala el driver de Opera (chromium-based)
+                service = ChromeService(executable_path=OperaDriverManager().install())
+                self._driver = webdriver.Chrome(options=options, service=service)
+            elif browser_name == "edge":
+                from selenium.webdriver.edge.options import Options as EdgeOptions
+                from selenium.webdriver.edge.service import Service as EdgeService
+                from webdriver_manager.microsoft import EdgeChromiumDriverManager
+                edge_options = EdgeOptions()
+                # Opciones para minimizar advertencias de seguridad y permitir login
+                edge_options.add_argument("--disable-gpu")
+                edge_options.add_argument("--no-sandbox")
+                edge_options.add_argument("--disable-extensions")
+                edge_options.add_argument("--disable-dev-shm-usage")
+                edge_options.add_argument("--window-size=360,720")
+                edge_options.add_argument("--ignore-certificate-errors")
+                edge_options.add_argument("--disable-features=IsolateOrigins,site-per-process")
+                edge_options.add_argument("--disable-blink-features=AutomationControlled")
+                edge_options.add_argument("--disable-popup-blocking")
+                edge_options.add_argument("--disable-infobars")
+                edge_options.add_argument("--disable-notifications")
+                edge_options.add_argument("--disable-web-security")
+                edge_options.add_argument("--allow-running-insecure-content")
+                edge_options.add_argument("--user-agent=YouTube Downloader v1.1.0")
+                edge_options.binary_location = browser_path
+                edge_service = EdgeService(executable_path=EdgeChromiumDriverManager().install())
+                self._driver = webdriver.Edge(options=edge_options, service=edge_service)
+            else:
+                raise Exception("Navegador no soportado para autenticación")
             self._driver.get("https://accounts.google.com/signin/v2/identifier?service=youtube")
             if self.parent and hasattr(self.parent, "showAuthDialog"):
                 self.parent.showAuthDialog.emit()
@@ -149,20 +200,35 @@ class GestorCookies:
         return cookie_path
 
     def _get_preferred_browser_path(self):
-        """Obtiene la ruta del navegador preferido de manera segura usando el registro de Windows"""
+        """Obtiene la ruta y nombre del navegador predeterminado del usuario usando el registro de Windows"""
         try:
             import winreg
+            user_default = None
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                    r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice") as key:
+                    prog_id = winreg.QueryValueEx(key, "ProgId")[0].lower()
+                    if "brave" in prog_id:
+                        user_default = "brave"
+                    elif "chrome" in prog_id:
+                        user_default = "chrome"
+                    elif "firefox" in prog_id:
+                        user_default = "firefox"
+                    elif "opera" in prog_id:
+                        user_default = "opera"
+                    elif "edge" in prog_id:
+                        user_default = "edge"
+            except Exception as e:
+                logger.warning(f"No se pudo determinar el navegador predeterminado del usuario: {e}")
+
             browser_paths = {}
-            
-            # Definir las claves del registro para cada navegador
             browser_registry = {
                 'chrome': r'Software\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe',
                 'firefox': r'Software\Microsoft\Windows\CurrentVersion\App Paths\firefox.exe',
                 'edge': r'Software\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe',
-                'brave': r'Software\Microsoft\Windows\CurrentVersion\App Paths\brave.exe'
+                'brave': r'Software\Microsoft\Windows\CurrentVersion\App Paths\brave.exe',
+                'opera': r'Software\Microsoft\Windows\CurrentVersion\App Paths\launcher.exe'
             }
-            
-            # Buscar navegadores instalados en el registro
             for browser, reg_path in browser_registry.items():
                 try:
                     with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path) as key:
@@ -171,23 +237,20 @@ class GestorCookies:
                             browser_paths[browser] = path
                 except WindowsError:
                     continue
-                    
-            # Usar la preferencia del usuario si está disponible y el navegador existe
+            if user_default and user_default in browser_paths:
+                logger.info(f"Usando el navegador predeterminado del usuario: {user_default}")
+                return user_default, browser_paths[user_default]
             browser_preference = self.settings.get('browser_preference', [])
             for browser in browser_preference:
                 if browser in browser_paths:
-                    logger.info(f"Usando navegador preferido: {browser}")
-                    return browser_paths[browser]
-                    
-            # Si no se encuentra ningún navegador preferido, usar el primero disponible
+                    logger.info(f"Usando navegador preferido configurado: {browser}")
+                    return browser, browser_paths[browser]
             if browser_paths:
                 browser, path = next(iter(browser_paths.items()))
                 logger.info(f"Usando navegador disponible: {browser}")
-                return path
-                
+                return browser, path
             logger.warning("No se encontraron navegadores instalados")
             return None
-            
         except Exception as e:
             logger.error(f"Error al buscar navegadores: {e}")
             return None
@@ -203,15 +266,16 @@ class GestorCookies:
 
     def get_browser_cookies(self):
         cookies = []
-        browser_preference = self.settings.get('browser_preference', 
-            ["chrome", "firefox", "brave", "edge"])
-        
+        browser_preference = self.settings.get('browser_preference',
+        ["brave","opera","chrome","firefox","edge"])
+
         # Validar que browser_cookie3 esté disponible de manera segura
         try:
             browser_map = {
                 "chrome": (browser_cookie3.chrome, "Chrome"),
                 "firefox": (browser_cookie3.firefox, "Firefox"),
                 "brave": (browser_cookie3.brave, "Brave"),
+                "opera": (browser_cookie3.opera, "Opera"),
                 "edge": (browser_cookie3.edge, "Edge")
             }
         except Exception as e:
@@ -281,12 +345,12 @@ class GestorCookies:
                 f.write("# Netscape HTTP Cookie File\n")
                 for cookie in encrypted_cookies:
                     f.write(f"{cookie['domain']}\t"
-                           f"{cookie['flag']}\t"
-                           f"{cookie['path']}\t"
-                           f"{cookie['secure']}\t"
-                           f"{cookie['expiry']}\t"
-                           f"{cookie['name']}\t"
-                           f"{cookie['value']}\n")
+                        f"{cookie['flag']}\t"
+                        f"{cookie['path']}\t"
+                        f"{cookie['secure']}\t"
+                        f"{cookie['expiry']}\t"
+                        f"{cookie['name']}\t"
+                        f"{cookie['value']}\n")
 
             try:
                 os.chmod(cookie_path, 0o600)

@@ -9,7 +9,7 @@ class Settings:
         "default_quality": "1080p",
         "download_dir": "",
         "audio_only": False,
-        "browser_preference": ["chrome", "firefox", "brave", "edge"],
+        "browser_preference": ["brave", "chrome", "firefox", "edge"],  # <-- Brave primero
         "cookie_retention_days": 7,
         "download_retries": 3
     }
