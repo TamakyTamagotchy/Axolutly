@@ -260,10 +260,6 @@ class GestorCookies:
         self._auth_completed = True
         logger.info("Autenticación completada en gestor de cookies")
         
-    def get_auth_status(self):
-        """Obtiene el estado actual de la autenticación"""
-        return self._auth_completed
-
     def get_browser_cookies(self):
         cookies = []
         browser_preference = self.settings.get('browser_preference',

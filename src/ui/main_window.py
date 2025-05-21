@@ -221,11 +221,21 @@ class YouTubeDownloader(QWidget):
         for file in os.listdir(output_dir):
             if file.endswith(".tmp") or file.endswith(".part"):
                 full_path = os.path.join(output_dir, file)
-                try:
-                    os.remove(full_path)
-                    logger.info(f"Archivo temporal eliminado: {full_path}")
-                except Exception as e:
-                    logger.error(f"Error al eliminar el archivo temporal {full_path}: {str(e)}")
+                removed = False
+                for attempt in range(20):  # Hasta 10 segundos (20*0.5)
+                    try:
+                        os.remove(full_path)
+                        logger.info(f"Archivo temporal eliminado: {full_path}")
+                        removed = True
+                        break
+                    except PermissionError as e:
+                        import time
+                        time.sleep(0.5)
+                    except Exception as e:
+                        logger.error(f"Error al eliminar el archivo temporal {full_path}: {str(e)}")
+                        break
+                if not removed and os.path.exists(full_path):
+                    logger.error(f"No se pudo eliminar el archivo temporal tras varios intentos (posiblemente sigue en uso): {full_path}")
 
     def apply_styles(self):
         if self.dark_mode:
@@ -431,7 +441,8 @@ class YouTubeDownloader(QWidget):
         self.download_thread.finished.connect(self.download_finished)
         self.download_thread.error.connect(self.download_error)
         self.download_thread.showAuthDialog.connect(self.show_auth_dialog)
-        
+        self.download_thread.cancelled.connect(self.handle_cancelled_download)  # <--- Añadido
+
         self.download_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
         self.open_last_download_button.setEnabled(False)
@@ -483,9 +494,7 @@ class YouTubeDownloader(QWidget):
             self.progress_bar.setStyleSheet("QProgressBar::chunk { background-color: #ff5252; }")
             self.cancel_button.setEnabled(False)
             logger.info("Cancelación de descarga solicitada")
-            
             self.download_thread.cancel()
-            self.download_thread.finished.connect(self.handle_cancelled_download)
 
     def handle_cancelled_download(self):
         self.remove_temp_files()
@@ -494,7 +503,10 @@ class YouTubeDownloader(QWidget):
         self.status_label.setText("")
         self.progress_bar.setStyleSheet("")
         self.download_button.setEnabled(True)
-            
+        self.cancel_button.setEnabled(False)
+        self.open_last_download_button.setEnabled(False)
+        logger.info("Descarga cancelada correctamente por el usuario")
+
     def update_progress(self, percentage: float):
         self.progress_bar.setValue(int(percentage))
         self.status_label.setText(f"Descargando: {int(percentage)}%")
@@ -538,6 +550,9 @@ class YouTubeDownloader(QWidget):
         self.show_success_message(f"Descarga completada con éxito.\nArchivo: {os.path.basename(file_path)}")
 
     def download_error(self, error_message):
+        # Evitar mostrar error si es cancelación
+        if "Descarga cancelada por el usuario" in error_message:
+            return
         self.status_label.setText("Error en la descarga")
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)

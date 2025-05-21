@@ -13,7 +13,7 @@ class DownloadThread(QThread):
     video_info = pyqtSignal(dict)
     requestOverwritePermission = pyqtSignal(str)
     showAuthDialog = pyqtSignal()
-    authenticationCompleted = pyqtSignal()
+    cancelled = pyqtSignal()  # señal
 
     def __init__(self, video_url, quality, audio_only, output_dir):
         super().__init__()
@@ -21,7 +21,7 @@ class DownloadThread(QThread):
         self.quality = quality
         self.audio_only = audio_only
         self.output_dir = output_dir
-        self.cancelled = False
+        self._cancelled = False  # <--- Cambiado de self.cancelled a self._cancelled
         self.final_filename = None
         self.temp_file = None
         self.overwrite_answer = None
@@ -77,8 +77,8 @@ class DownloadThread(QThread):
 
         temp_filename = ydl.prepare_filename(info)
         if os.path.exists(temp_filename) and not self.ask_overwrite_permission(temp_filename):
-            self.cancelled = True
-            self.error.emit("Descarga cancelada por el usuario")
+            self._cancelled = True  # <--- Cambiado
+            self.cancelled.emit()
             return
         elif os.path.exists(temp_filename):
             os.remove(temp_filename)
@@ -90,12 +90,15 @@ class DownloadThread(QThread):
             with YoutubeDL(opts) as ydl:
                 ydl.download([self.video_url])
         except Exception as e:
+            if self._cancelled and "Descarga cancelada por el usuario" in str(e):  # <--- Cambiado
+                self.cancelled.emit()
+                return
             self.error.emit(f"Error en la descarga: {e}")
             return
 
-        if self.cancelled:
+        if self._cancelled:  # <--- Cambiado
             self.cleanup_temp_files()
-            self.error.emit("Descarga cancelada por el usuario")
+            self.cancelled.emit()
             return
 
         final_path = self.final_filename or temp_filename
@@ -147,7 +150,7 @@ class DownloadThread(QThread):
             self.waitCondition.wakeAll()
 
     def cancel(self):
-        self.cancelled = True
+        self._cancelled = True  # <--- Cambiado
         if self._driver:
             try:
                 self._driver.quit()
@@ -217,7 +220,7 @@ class DownloadThread(QThread):
         if now - self.last_progress_time < 0.5:
             return
         self.last_progress_time = now
-        if self.cancelled:
+        if self._cancelled:  # <--- Cambiado
             raise Exception("Descarga cancelada por el usuario")
         if d['status'] == 'downloading':
             total = d.get('total_bytes') or d.get('total_bytes_estimate')
