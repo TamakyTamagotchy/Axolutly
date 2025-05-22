@@ -13,10 +13,16 @@ class Utils:
             parsed = urlparse(url)
             if parsed.netloc.lower() not in {'youtube.com', 'www.youtube.com', 'youtu.be'}:
                 return False
-                
-            video_id_pattern = r'(?:v=|\/)([-\w]{11})(?:\S+)?$'
-            return bool(re.search(video_id_pattern, url))
-        except:
+
+            patterns = [
+                r'(?:v=|\/)([-\w]{11})(?:\S+)?$',  # Video ID
+                r'(?:\/shorts\/)([-\w]{11})$',    # Shorts
+                r'(?:\/live\/)([-\w]{11})$',      # Live
+                r'(?:list=)([-\w]+)$'             # Playlist
+            ]
+            return any(re.search(pattern, url) for pattern in patterns)
+        except Exception as e:
+            logger.error(f"Error validando URL: {e}")
             return False
 
     @staticmethod

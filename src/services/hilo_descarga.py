@@ -169,7 +169,7 @@ class DownloadThread(QThread):
             'noplaylist': True,
             'retries': 3,
             'http_headers': {
-                'User-Agent': 'YouTube Downloader v1.1.0',
+                'User-Agent': 'Axolutly v1.1.3',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'es-ES,es;q=0.8,en-US;q=0.5,en;q=0.3',
             },

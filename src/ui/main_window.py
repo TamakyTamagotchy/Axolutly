@@ -11,9 +11,10 @@ from src.services.hilo_descarga import DownloadThread
 from src.services.utils import Utils
 import time
 from config.settings import Settings
+from src.services.updater import Updater
 
 class YouTubeDownloader(QWidget):
-    """ GUI De la aplicación YouTube Downloader """
+    """ GUI De la aplicación Axolutly """
     def __init__(self):
         super().__init__()
         self.settings = Settings()
@@ -21,10 +22,10 @@ class YouTubeDownloader(QWidget):
         self.download_thread = None
         self.dark_mode = self.settings.get('theme') == 'dark'
         self.init_ui()
-        logger.info("Aplicación YouTube Downloader iniciada")
+        logger.info("Aplicación Axolutly iniciada")
 
     def init_ui(self):
-        self.setWindowTitle('YouTube Downloader')
+        self.setWindowTitle('Axolutly')
         self.setGeometry(100, 100, 600, 500)
         # Ajustar ruta de iconos para PyInstaller/cx_Freeze
         icon_dir = Config.ICON_DIR
@@ -66,6 +67,13 @@ class YouTubeDownloader(QWidget):
         main_layout.addWidget(self.status_label)
         self.version_label = self.create_version_label()
         main_layout.addWidget(self.version_label)
+
+        # Botón de actualización
+        self.update_button = QPushButton("Buscar actualizaciones")
+        self.update_button.setObjectName("update_button")
+        self.update_button.clicked.connect(self.check_for_updates)
+        main_layout.addWidget(self.update_button)
+
         self.setLayout(main_layout)
 
     def create_button(self, text, icon_name, slot, object_name, enabled=True):
@@ -81,7 +89,7 @@ class YouTubeDownloader(QWidget):
         return button
 
     def create_title_label(self):
-        title_label = QLabel("YouTube Downloader")
+        title_label = QLabel("Axolutly")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_label.setObjectName("title")
         return title_label
@@ -185,7 +193,7 @@ class YouTubeDownloader(QWidget):
         return status_label
     
     def create_version_label(self):
-        version_label = QLabel("Versión: 1.1.0")
+        version_label = QLabel("Versión: 1.1.3")
         version_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         version_label.setStyleSheet("color: #888888; font-size: 10px;")
         return version_label
@@ -559,3 +567,24 @@ class YouTubeDownloader(QWidget):
         self.progress_bar.setValue(0)
         logger.error(f"Error en la descarga: {error_message}")
         self.show_error_message("Ocurrió un error durante la descarga. Por favor, inténtelo de nuevo.")
+
+    def check_for_updates(self):
+        self.update_button.setEnabled(False)
+        self.update_button.setText("Buscando...")
+        QApplication.processEvents()
+        available, info = Updater.is_new_version_available()
+        if available:
+            from PyQt6.QtWidgets import QMessageBox
+            reply = QMessageBox.question(
+                self,
+                "Actualización disponible",
+                f"Hay una nueva versión disponible.\n¿Desea descargar e instalar la actualización?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                Updater.download_and_apply_update(info, parent_widget=self)
+        else:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "Actualización", "No hay actualizaciones disponibles.")
+        self.update_button.setEnabled(True)
+        self.update_button.setText("Buscar actualizaciones")

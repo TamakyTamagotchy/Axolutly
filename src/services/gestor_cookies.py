@@ -96,7 +96,7 @@ class GestorCookies:
                 options.add_argument("--window-size=360,720")
                 options.add_argument("--disable-dev-shm-usage")
                 options.add_argument("--disable-extensions")
-                options.add_argument(f"--user-agent=YouTube Downloader v1.1.0")
+                options.add_argument(f"--user-agent=Axolutly v1.1.3")
                 options.binary_location = browser_path
                 self._driver = webdriver.Chrome(options=options)
             elif browser_name == "firefox":
@@ -119,7 +119,7 @@ class GestorCookies:
                 options.add_argument("--window-size=360,720")
                 options.add_argument("--disable-dev-shm-usage")
                 options.add_argument("--disable-extensions")
-                options.add_argument(f"--user-agent=YouTube Downloader v1.1.0")
+                options.add_argument(f"--user-agent=Axolutly v1.1.3")
                 options.binary_location = browser_path
                 # OperaDriverManager instala el driver de Opera (chromium-based)
                 service = ChromeService(executable_path=OperaDriverManager().install())
@@ -143,7 +143,7 @@ class GestorCookies:
                 edge_options.add_argument("--disable-notifications")
                 edge_options.add_argument("--disable-web-security")
                 edge_options.add_argument("--allow-running-insecure-content")
-                edge_options.add_argument("--user-agent=YouTube Downloader v1.1.0")
+                edge_options.add_argument("--user-agent=Axolutly v1.1.3")
                 edge_options.binary_location = browser_path
                 edge_service = EdgeService(executable_path=EdgeChromiumDriverManager().install())
                 self._driver = webdriver.Edge(options=edge_options, service=edge_service)
