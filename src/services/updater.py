@@ -1,75 +1,82 @@
 import requests
 import os
 import zipfile
+import shutil
 from config.logger import logger
 
-GITHUB_API_RELEASES = "https://api.github.com/repos/TamakyTamagotchy/Axolutly/releases/latest"
-REPO_RELEASES_URL = "https://github.com/TamakyTamagotchy/Axolutly/releases/latest"
-CURRENT_VERSION = "1.1.3"  # Debe coincidir con tu versión actual
-
 class Updater:
+    REPO_URL = "https://api.github.com/repos/TamakyTamagotchy/Axolutly/releases/latest"
+    DOWNLOAD_BASE_URL = "https://github.com/TamakyTamagotchy/Axolutly/releases/download"
+
     @staticmethod
-    def get_latest_release_info():
+    def is_new_version_available(current_version="1.1.3"):
         try:
-            response = requests.get(GITHUB_API_RELEASES, timeout=10)
-            if response.status_code == 200:
-                return response.json()
-            logger.error(f"Error consultando releases: {response.status_code}")
+            response = requests.get(Updater.REPO_URL, timeout=10)
+            response.raise_for_status()
+            latest_release = response.json()
+            latest_version = latest_release.get("tag_name", current_version)
+            return latest_version > current_version, latest_release
         except Exception as e:
-            logger.error(f"Error consultando releases: {e}")
-        return None
-
-    @staticmethod
-    def is_new_version_available():
-        info = Updater.get_latest_release_info()
-        if not info:
+            logger.error(f"Error verificando actualizaciones: {e}")
             return False, None
-        latest_version = info.get("tag_name", "").lstrip("v")
-        if Updater.compare_versions(latest_version, CURRENT_VERSION):
-            return True, info
-        return False, None
 
     @staticmethod
-    def compare_versions(v1, v2):
-        def normalize(v):
-            return [int(x) for x in v.split(".") if x.isdigit()]
-        return normalize(v1) > normalize(v2)
-
-    @staticmethod
-    def download_and_apply_update(info, parent_widget=None):
-        assets = info.get("assets", [])
-        # Busca un zip o el ejecutable principal
-        asset = next((a for a in assets if a["name"].endswith(".zip")), None)
-        if not asset:
-            logger.error("No se encontró un archivo .zip en el release.")
-            return False
-
-        url = asset["browser_download_url"]
-        local_zip = os.path.join(os.getcwd(), asset["name"])
+    def download_and_apply_update(latest_release, parent_widget=None):
         try:
-            # Descargar el zip
-            with requests.get(url, stream=True, timeout=60) as r:
-                r.raise_for_status()
-                with open(local_zip, "wb") as f:
-                    for chunk in r.iter_content(chunk_size=8192):
-                        f.write(chunk)
-            # Extraer y reemplazar archivos
-            with zipfile.ZipFile(local_zip, "r") as zip_ref:
-                for member in zip_ref.namelist():
-                    # Solo reemplaza archivos existentes o nuevos en la carpeta principal
-                    dest_path = os.path.join(os.getcwd(), member)
-                    if os.path.exists(dest_path):
-                        os.remove(dest_path)
-                    zip_ref.extract(member, os.getcwd())
-            os.remove(local_zip)
-            logger.info("Actualización aplicada correctamente.")
+            latest_version = latest_release.get("tag_name")
+            assets = latest_release.get("assets", [])
+            zip_asset = next((asset for asset in assets if asset["name"].endswith(".zip")), None)
+
+            if not zip_asset:
+                logger.error("No se encontró un archivo ZIP en los activos de la última versión.")
+                return
+
+            download_url = zip_asset["browser_download_url"]
+            zip_path = os.path.join(os.getcwd(), f"update_{latest_version}.zip")
+
+            # Descargar el archivo ZIP
+            logger.info(f"Descargando actualización desde: {download_url}")
+            response = requests.get(download_url, stream=True, timeout=30)
+            response.raise_for_status()
+            with open(zip_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=1024):
+                    f.write(chunk)
+
+            logger.info("Actualización descargada exitosamente.")
+            Updater._apply_update(zip_path)
+        except Exception as e:
+            logger.error(f"Error descargando actualización: {e}")
             if parent_widget:
                 from PyQt6.QtWidgets import QMessageBox
-                QMessageBox.information(parent_widget, "Actualización", "¡Actualización completada! Reinicia la aplicación para aplicar los cambios.")
-            return True
+                QMessageBox.critical(parent_widget, "Error", "No se pudo descargar la actualización.")
+
+    @staticmethod
+    def _apply_update(zip_path):
+        try:
+            extract_dir = os.path.join(os.getcwd(), "update_temp")
+            if os.path.exists(extract_dir):
+                shutil.rmtree(extract_dir)
+
+            # Extraer el contenido del ZIP
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(extract_dir)
+
+            # Reemplazar archivos existentes con los nuevos
+            for root, dirs, files in os.walk(extract_dir):
+                for file in files:
+                    src_file = os.path.join(root, file)
+                    relative_path = os.path.relpath(src_file, extract_dir)
+                    dest_file = os.path.join(os.getcwd(), relative_path)
+
+                    os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+                    shutil.move(src_file, dest_file)
+                    logger.info(f"Archivo reemplazado: {dest_file}")
+
+            # Limpiar archivos temporales
+            shutil.rmtree(extract_dir)
+            os.remove(zip_path)
+            logger.info("Actualización aplicada exitosamente. Reinicie la aplicación.")
         except Exception as e:
             logger.error(f"Error aplicando actualización: {e}")
-            if parent_widget:
-                from PyQt6.QtWidgets import QMessageBox
-                QMessageBox.critical(parent_widget, "Actualización", f"Error al actualizar: {e}")
-            return False
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
