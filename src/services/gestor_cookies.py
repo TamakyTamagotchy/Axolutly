@@ -40,45 +40,32 @@ class GestorCookies:
             logger.error(f"Error en limpieza de cookies: {e}")
 
     def get_cookie_path(self):
+        """Devuelve la ruta del archivo de cookies para yt-dlp."""
         cookie_dir = os.path.join(os.path.dirname(__file__), "cookies")
         cookie_path = os.path.join(cookie_dir, "youtube_cookies.txt")
-        if os.path.exists(cookie_path) and os.path.getsize(cookie_path) > 0:
-            return cookie_path
-        return None
+        return cookie_path if os.path.exists(cookie_path) else None
 
     def update_cookies(self):
+        """Actualiza las cookies usando Selenium solo si es necesario."""
         logger.info("Iniciando actualización de cookies...")
-
+        
+        # Obtener la ruta de cookies y asegurar que el directorio exista
         cookie_dir = os.path.join(os.path.dirname(__file__), "cookies")
-        if not os.path.exists(cookie_dir):
-            os.makedirs(cookie_dir, mode=0o700)
-
+        os.makedirs(cookie_dir, exist_ok=True)
         cookie_path = os.path.join(cookie_dir, "youtube_cookies.txt")
+
+        # Validar la ruta de cookies
         if not Utils.is_safe_path(cookie_path):
             logger.error("Ruta de cookies no segura, abortando actualización de cookies.")
             raise Exception("Ruta de cookies no segura")
 
-        # Si ya existen cookies válidas, simplemente las reutilizamos y NO usamos Selenium
-        if os.path.exists(cookie_path):
-            try:
-                if os.path.getsize(cookie_path) > 0:
-                    logger.info("Archivo de cookies ya existe y no está vacío, reutilizando cookies.")
-                    return cookie_path
-            except Exception as e:
-                logger.warning(f"No se pudo verificar el archivo de cookies existente: {e}")
+        # Reutilizar cookies existentes si son válidas
+        if os.path.exists(cookie_path) and os.path.getsize(cookie_path) > 0:
+            logger.info("Archivo de cookies existente encontrado. Reutilizando.")
+            return cookie_path
 
-        # Intentar obtener cookies del navegador (browser_cookie3)
-        cookies = self.get_browser_cookies()
-        if cookies:
-            if self.create_cookie_file(cookies, cookie_path):
-                try:
-                    os.chmod(cookie_path, 0o600)
-                except Exception as e:
-                    logger.warning(f"No se pudieron establecer permisos restrictivos al archivo de cookies: {e}")
-                logger.info("Cookies actualizadas exitosamente")
-                return cookie_path
-
-        # Solo si no hay cookies válidas, usar Selenium como último recurso
+        # Si no hay cookies válidas, usar Selenium como último recurso
+        logger.info("No se encontraron cookies válidas. Iniciando autenticación con Selenium...")
         try:
             logger.info("Iniciando proceso de autenticación con Selenium...")
             browser_info = self._get_preferred_browser_path()
@@ -91,9 +78,9 @@ class GestorCookies:
                 from selenium.webdriver.chrome.options import Options
                 options = Options()
                 options.add_argument("--enable-unsafe-swiftshader")
-                options.add_argument("--disable-gpu")
-                options.add_argument("--no-sandbox")
                 options.add_argument("--window-size=360,720")
+                options.add_argument("--disable-gpu")  # <-- Mantener solo si es necesario
+                options.add_argument("--no-sandbox")  # <-- Puede ser visto como sospechoso
                 options.add_argument("--disable-dev-shm-usage")
                 options.add_argument("--disable-extensions")
                 options.add_argument(f"--user-agent=Axolutly v1.1.3")
@@ -152,17 +139,24 @@ class GestorCookies:
             self._driver.get("https://accounts.google.com/signin/v2/identifier?service=youtube")
             if self.parent and hasattr(self.parent, "showAuthDialog"):
                 self.parent.showAuthDialog.emit()
+
             timeout = 300
             start_time = time.time()
             while not self._auth_completed and time.time() - start_time < timeout:
                 time.sleep(0.1)
-                if self.parent and hasattr(self.parent, "cancelled") and self.parent.cancelled:
+                # Verificar explícitamente si la autenticación fue cancelada
+                if self.parent and hasattr(self.parent, "_cancelled") and self.parent._cancelled:
+                    logger.warning("Autenticación cancelada por el usuario desde el hilo principal.")
                     raise Exception("Autenticación cancelada por el usuario")
+
             if not self._auth_completed:
                 raise Exception("Timeout en autenticación")
+
             if "youtube.com" not in self._driver.current_url:
                 self._driver.get("https://www.youtube.com")
                 time.sleep(2)
+
+            # Guardar cookies
             cookies = self._driver.get_cookies()
             cookie_lines = ["# Netscape HTTP Cookie File"]
             for cookie in cookies:
@@ -177,15 +171,10 @@ class GestorCookies:
                     cookie_lines.append(
                         f"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}"
                     )
-            if not Utils.is_safe_path(cookie_path):
-                logger.error("Ruta de cookies no segura, abortando guardado de cookies Selenium.")
-                raise Exception("Ruta de cookies no segura")
+
             with open(cookie_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(cookie_lines))
-            try:
-                os.chmod(cookie_path, 0o600)
-            except Exception as e:
-                logger.warning(f"No se pudieron establecer permisos restrictivos al archivo de cookies: {e}")
+            os.chmod(cookie_path, 0o600)
             logger.info(f"Cookies actualizadas: {cookie_path}")
         except Exception as e:
             logger.error(f"Error en autenticación Selenium: {e}")

@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (QApplication, QWidget, QPushButton, QLabel, QVBoxLayout, QHBoxLayout,
-                            QLineEdit, QCheckBox, QComboBox, QFileDialog, QMessageBox)
+                            QLineEdit, QCheckBox, QComboBox, QFileDialog, QMessageBox, QMenuBar, QMenu)
+from PyQt6.QtGui import QIcon, QAction  # Cambiar la importación de QAction a PyQt6.QtGui
 from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QSequentialAnimationGroup, QPauseAnimation, QEasingCurve
-from PyQt6.QtGui import QIcon
 import os
 import sys
 from Animation.Animation import AnimatedProgressBar
@@ -12,6 +12,7 @@ from src.services.utils import Utils
 import time
 from config.settings import Settings
 from src.services.updater import Updater
+import subprocess
 
 class YouTubeDownloader(QWidget):
     """ GUI De la aplicación Axolutly """
@@ -33,14 +34,72 @@ class YouTubeDownloader(QWidget):
             icon_dir = os.path.join(sys._MEIPASS, "icons")
         self.setWindowIcon(QIcon(os.path.join(icon_dir, Config.ICON_YOUTUBE)))
         self.icon_dir = icon_dir  # Guardar para uso en create_button
+
+        # Configurar el diseño principal antes de agregar la barra de menú
+        main_layout = QVBoxLayout()
+        self.setLayout(main_layout)
+
+        # Crear barra de menú
+        self.menu_bar = QMenuBar(self)
+        self.create_menu_bar()
+
         self.setup_ui_components()
         self.apply_styles()
         self.center_on_screen()
         if Config.APP_MODE == "development":
             logger.debug("Interfaz de usuario inicializada")
 
+    def create_menu_bar(self):
+        """Crea la barra de menú con opciones adicionales."""
+        # Menú principal
+        file_menu = QMenu("Archivo", self)
+        self.menu_bar.addMenu(file_menu)
+
+        # Opción para actualizar yt-dlp
+        update_yt_dlp_action = QAction("Actualizar yt-dlp", self)
+        update_yt_dlp_action.triggered.connect(self.update_yt_dlp)
+        file_menu.addAction(update_yt_dlp_action)
+
+        # Opción para salir
+        exit_action = QAction("Salir", self)
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+
+        # Añadir la barra de menú al diseño principal
+        self.layout().setMenuBar(self.menu_bar)  # Ahora `self.layout()` no será None
+
+    def update_yt_dlp(self):
+        """Actualiza la librería yt-dlp descargando la última versión desde PyPI."""
+        try:
+            reply = QMessageBox.question(
+                self,
+                "Actualizar yt-dlp",
+                "¿Desea actualizar la librería yt-dlp a la última versión?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+            # Ruta de la carpeta lib/yt-dlp
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            yt_dlp_dir = os.path.join(base_dir, "lib", "yt-dlp")
+
+            if not os.path.exists(yt_dlp_dir):
+                QMessageBox.critical(self, "Error", "No se encontró la carpeta de yt-dlp.")
+                return
+
+            # Descargar e instalar la última versión de yt-dlp
+            QMessageBox.information(self, "Actualización", "Iniciando la actualización de yt-dlp...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp", "--target", yt_dlp_dir])
+
+            QMessageBox.information(self, "Actualización", "La librería yt-dlp se actualizó correctamente.")
+            logger.info("yt-dlp actualizado correctamente.")
+        except Exception as e:
+            logger.error(f"Error actualizando yt-dlp: {e}")
+            QMessageBox.critical(self, "Error", f"No se pudo actualizar yt-dlp.\n{e}")
+
     def setup_ui_components(self):
-        main_layout = QVBoxLayout()
+        main_layout = self.layout()  # Usa el diseño ya configurado en init_ui
         main_layout.setContentsMargins(30, 30, 30, 30)
         main_layout.setSpacing(20)
 
@@ -74,8 +133,6 @@ class YouTubeDownloader(QWidget):
         self.update_button.clicked.connect(self.check_for_updates)
         main_layout.addWidget(self.update_button)
 
-        self.setLayout(main_layout)
-
     def create_button(self, text, icon_name, slot, object_name, enabled=True):
         button = QPushButton(text)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -97,6 +154,7 @@ class YouTubeDownloader(QWidget):
     def create_url_input(self):
         url_input = QLineEdit()
         url_input.setPlaceholderText("Ingrese la URL del video de YouTube")
+        url_input.setObjectName("url_input")
         return url_input
 
     def save_quality_preference(self, quality_text):
@@ -430,8 +488,7 @@ class YouTubeDownloader(QWidget):
             return
 
         last_dir = self.settings.get('download_dir', '')
-        output_dir = QFileDialog.getExistingDirectory(self, "Seleccione la carpeta de salida",
-                                                     last_dir)
+        output_dir = QFileDialog.getExistingDirectory(self, "Seleccione la carpeta de salida", last_dir)
         if not output_dir:
             return
 
@@ -449,7 +506,6 @@ class YouTubeDownloader(QWidget):
         self.download_thread.finished.connect(self.download_finished)
         self.download_thread.error.connect(self.download_error)
         self.download_thread.showAuthDialog.connect(self.show_auth_dialog)
-        self.download_thread.cancelled.connect(self.handle_cancelled_download)  # <--- Añadido
 
         self.download_button.setEnabled(False)
         self.cancel_button.setEnabled(True)

@@ -162,78 +162,49 @@ class DownloadThread(QThread):
     def get_ydl_options(self):
         opts = {
             'outtmpl': os.path.join(
-                self.output_dir, 
+                self.output_dir,
                 self.security.sanitize_filename('%(title)s.%(ext)s')
             ),
             'progress_hooks': [self.progress_hook],
             'noplaylist': True,
-            'retries': 3,
+            'retries': 10,  # Usar el valor predeterminado de yt-dlp
             'http_headers': {
-                'User-Agent': 'Axolutly v1.1.3',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'es-ES,es;q=0.8,en-US;q=0.5,en;q=0.3',
+                'User-Agent': 'yt-dlp',
+                'Accept': '*/*',
+                'Accept-Language': 'es-ES,es;q=0.9',
             },
-            'nocheckcertificate': False,
             'socket_timeout': 30,
             'restrict_filenames': True,
-            'no_color': True,
-            'geo_bypass': False,
             'no_warnings': True,
             'quiet': True,
-            'extract_flat': "in_playlist",
-            'source_address': '0.0.0.0'
+            'format': f'bestvideo[height<={self.quality}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'merge_output_format': 'mp4',
         }
+
         if self.audio_only:
             opts.update({
                 'format': 'bestaudio/best',
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
+                    'preferredquality': '192',
                 }]
             })
-        else:
-            opts.update({
-                'format': f'bestvideo[height<={self.quality}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                'merge_output_format': 'mp4',
-                'format_sort': ['height', 'vcodec:h264', 'filesize', 'ext'],
-            })
-        # Usar la variable de entorno FFMPEG_LOCATION si está disponible
+
+        # Configuración de FFMPEG_LOCATION si está disponible
         ffmpeg_base = os.environ.get("FFMPEG_LOCATION")
         if ffmpeg_base and os.path.isdir(ffmpeg_base):
-            if os.name == "nt":
-                ffmpeg_exe = os.path.join(ffmpeg_base, "ffmpeg.exe")
-                ffprobe_exe = os.path.join(ffmpeg_base, "ffprobe.exe")
-            else:
-                ffmpeg_exe = os.path.join(ffmpeg_base, "ffmpeg")
-                ffprobe_exe = os.path.join(ffmpeg_base, "ffprobe")
-            if os.path.isfile(ffmpeg_exe) and os.path.isfile(ffprobe_exe):
-                opts['ffmpeg_location'] = ffmpeg_base
-            else:
-                opts['ffmpeg_location'] = ffmpeg_exe
-        else:
-            opts['ffmpeg_location'] = ""
+            opts['ffmpeg_location'] = ffmpeg_base
 
         return opts
 
     def progress_hook(self, d):
-        now = time.time()
-        if now - self.last_progress_time < 0.5:
-            return
-        self.last_progress_time = now
-        if self._cancelled:  # <--- Cambiado
-            raise Exception("Descarga cancelada por el usuario")
         if d['status'] == 'downloading':
             total = d.get('total_bytes') or d.get('total_bytes_estimate')
             if total:
                 downloaded = d.get('downloaded_bytes', 0)
                 percent = int(downloaded / total * 100)
                 self.progress.emit(percent)
-            else:
-                try:
-                    percent = float(d.get('_percent_str', '0%').strip().replace('%', ''))
-                    self.progress.emit(int(percent))
-                except ValueError:
-                    pass
         elif d['status'] == 'finished':
             self.progress.emit(100)
             self.final_filename = d['info_dict']['_filename']
