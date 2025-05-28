@@ -1,7 +1,7 @@
 import os
-import time
 from PyQt6.QtCore import QThread, pyqtSignal, QMutex, QWaitCondition, QMutexLocker, pyqtSlot
 from yt_dlp import YoutubeDL
+from yt_dlp.utils import DownloadCancelled
 from config.logger import logger
 from src.services.gestor_cookies import GestorCookies
 from src.services.security import Security
@@ -21,7 +21,8 @@ class DownloadThread(QThread):
         self.quality = quality
         self.audio_only = audio_only
         self.output_dir = output_dir
-        self._cancelled = False  # <--- Cambiado de self.cancelled a self._cancelled
+        self._cancelled = False
+        self._auth_cancelled = False
         self.final_filename = None
         self.temp_file = None
         self.overwrite_answer = None
@@ -40,6 +41,39 @@ class DownloadThread(QThread):
             self.cookie_manager.set_auth_completed()
         logger.info("Autenticación completada en hilo de descarga")
 
+    def get_ydl_options(self):
+        opts = {
+            'outtmpl': os.path.join(
+                self.output_dir,
+                self.security.sanitize_filename('%(title)s.%(ext)s')
+            ),
+            'progress_hooks': [self.progress_hook],
+            'http_headers': {
+                'User-Agent': 'yt-dlp',
+                'Accept': '*/*',
+                'Accept-Language': 'es-ES,es;q=0.9',
+            },
+            'format': f'bestvideo[height<={self.quality}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'merge_output_format': 'mp4',
+        }
+
+        if self.audio_only:
+            opts.update({
+                'format': 'bestaudio/best',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }]
+            })
+
+        # Configuración de FFMPEG_LOCATION si está disponible
+        ffmpeg_base = os.environ.get("FFMPEG_LOCATION")
+        if ffmpeg_base and os.path.isdir(ffmpeg_base):
+            opts['ffmpeg_location'] = ffmpeg_base
+
+        return opts
+
     def run(self):
         try:
             # Validar URL antes de procesar
@@ -52,6 +86,7 @@ class DownloadThread(QThread):
             if cookie_path:
                 opts['cookiefile'] = cookie_path
                 logger.info(f"Usando archivo de cookies: {cookie_path}")
+
             with YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(self.video_url, download=False)
         except Exception as e:
@@ -76,12 +111,27 @@ class DownloadThread(QThread):
                 return
 
         temp_filename = ydl.prepare_filename(info)
-        if os.path.exists(temp_filename) and not self.ask_overwrite_permission(temp_filename):
-            self._cancelled = True  # <--- Cambiado
-            self.cancelled.emit()
-            return
-        elif os.path.exists(temp_filename):
-            os.remove(temp_filename)
+        # Preguntar al usuario si desea sobrescribir el archivo si ya existe
+        if os.path.exists(temp_filename):
+            self.requestOverwritePermission.emit(os.path.basename(temp_filename))
+            with QMutexLocker(self.mutex):
+                waited = self.waitCondition.wait(self.mutex, 60000)
+                if not waited or self.overwrite_answer is None:
+                    logger.warning("Timeout en confirmación de sobrescritura")
+                    self.error.emit("No se recibió respuesta para sobrescribir el archivo.")
+                    return
+                if not self.overwrite_answer:
+                    logger.info("El usuario decidió no sobrescribir el archivo existente.")
+                    self.error.emit("Descarga cancelada por el usuario")
+                    return
+            try:
+                os.remove(temp_filename)
+                logger.info(f"Archivo existente eliminado para sobrescribir: {temp_filename}")
+            except Exception as e:
+                logger.error(f"No se pudo eliminar el archivo existente: {e}")
+                self.error.emit(f"No se pudo eliminar el archivo existente: {e}")
+                return
+
         try:
             opts = self.get_ydl_options()
             cookie_path = self.cookie_manager.get_cookie_path()
@@ -89,27 +139,23 @@ class DownloadThread(QThread):
                 opts['cookiefile'] = cookie_path
             with YoutubeDL(opts) as ydl:
                 ydl.download([self.video_url])
+        except DownloadCancelled:
+            self.cleanup_temp_files()
+            self.cancelled.emit()
+            return
         except Exception as e:
-            if self._cancelled and "Descarga cancelada por el usuario" in str(e):  # <--- Cambiado
+            if self._cancelled and "Descarga cancelada por el usuario" in str(e):
                 self.cancelled.emit()
                 return
             self.error.emit(f"Error en la descarga: {e}")
             return
 
-        if self._cancelled:  # <--- Cambiado
+        if self._cancelled:
             self.cleanup_temp_files()
             self.cancelled.emit()
             return
 
         final_path = self.final_filename or temp_filename
-        if os.path.exists(temp_filename) and final_path != temp_filename:
-            try:
-                os.replace(temp_filename, final_path)
-            except Exception as rename_error:
-                logger.error(f"Error al renombrar el archivo: {rename_error}")
-                self.error.emit("Error interno al procesar la descarga")
-                return
-
         if self.audio_only and final_path.lower().endswith(".webm"):
             final_path = final_path[:-5] + ".mp3"
 
@@ -124,81 +170,9 @@ class DownloadThread(QThread):
             except Exception as e:
                 logger.error(f"Error al eliminar el archivo temporal {self.temp_file}: {str(e)}")
 
-    def ask_overwrite_permission(self, file_path):
-        exists, similar_files = self.cookie_manager.check_file_exists(file_path)
-        if not exists:
-            return True
-
-        message = f"El archivo '{os.path.basename(file_path)}' ya existe."
-        if similar_files:
-            message += "\nAdemás, se encontraron archivos con contenido idéntico:\n"
-            message += "\n".join(f"- {f}" for f in similar_files)
-        
-        self.requestOverwritePermission.emit(message)
-        
-        with QMutexLocker(self.mutex):
-            waited = self.waitCondition.wait(self.mutex, 10000)
-            if not waited or self.overwrite_answer is None:
-                logger.warning("Timeout en confirmación de sobrescritura")
-                return False
-        return self.overwrite_answer
-
-    @pyqtSlot(bool)
-    def set_overwrite_answer(self, answer):
-        with QMutexLocker(self.mutex):
-            self.overwrite_answer = answer
-            self.waitCondition.wakeAll()
-
-    def cancel(self):
-        self._cancelled = True  # <--- Cambiado
-        if self._driver:
-            try:
-                self._driver.quit()
-            except:
-                pass
-            self._driver = None
-        self.quit()
-            
-    def get_ydl_options(self):
-        opts = {
-            'outtmpl': os.path.join(
-                self.output_dir,
-                self.security.sanitize_filename('%(title)s.%(ext)s')
-            ),
-            'progress_hooks': [self.progress_hook],
-            'noplaylist': True,
-            'retries': 10,  # Usar el valor predeterminado de yt-dlp
-            'http_headers': {
-                'User-Agent': 'yt-dlp',
-                'Accept': '*/*',
-                'Accept-Language': 'es-ES,es;q=0.9',
-            },
-            'socket_timeout': 30,
-            'restrict_filenames': True,
-            'no_warnings': True,
-            'quiet': True,
-            'format': f'bestvideo[height<={self.quality}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-            'merge_output_format': 'mp4',
-        }
-
-        if self.audio_only:
-            opts.update({
-                'format': 'bestaudio/best',
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '192',
-                }]
-            })
-
-        # Configuración de FFMPEG_LOCATION si está disponible
-        ffmpeg_base = os.environ.get("FFMPEG_LOCATION")
-        if ffmpeg_base and os.path.isdir(ffmpeg_base):
-            opts['ffmpeg_location'] = ffmpeg_base
-
-        return opts
-
     def progress_hook(self, d):
+        if self._cancelled:
+            raise DownloadCancelled("Descarga cancelada por el usuario")
         if d['status'] == 'downloading':
             total = d.get('total_bytes') or d.get('total_bytes_estimate')
             if total:
@@ -209,3 +183,30 @@ class DownloadThread(QThread):
             self.progress.emit(100)
             self.final_filename = d['info_dict']['_filename']
             logger.info(f"Archivo final: {self.final_filename}")
+
+    @pyqtSlot(bool)
+    def set_overwrite_answer(self, answer):
+        with QMutexLocker(self.mutex):
+            self.overwrite_answer = answer
+            self.waitCondition.wakeAll()
+
+    def cancel(self):
+        """Marca el hilo como cancelado y detiene la descarga si es posible."""
+        self._cancelled = True
+        # Si hay un gestor de cookies con Selenium abierto, ciérralo
+        if hasattr(self, "cookie_manager") and hasattr(self.cookie_manager, "_driver") and self.cookie_manager._driver:
+            try:
+                self.cookie_manager._driver.quit()
+            except Exception:
+                pass
+            self.cookie_manager._driver = None
+
+    def cancel_auth(self):
+        """Cancela solo la autenticación (no la descarga)."""
+        self._auth_cancelled = True
+        if hasattr(self, "cookie_manager") and hasattr(self.cookie_manager, "_driver") and self.cookie_manager._driver:
+            try:
+                self.cookie_manager._driver.quit()
+            except Exception:
+                pass
+            self.cookie_manager._driver = None

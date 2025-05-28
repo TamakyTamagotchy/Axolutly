@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (QApplication, QWidget, QPushButton, QLabel, QVBoxLayout, QHBoxLayout,
                             QLineEdit, QCheckBox, QComboBox, QFileDialog, QMessageBox, QMenuBar, QMenu)
-from PyQt6.QtGui import QIcon, QAction  # Cambiar la importación de QAction a PyQt6.QtGui
+from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QSequentialAnimationGroup, QPauseAnimation, QEasingCurve
 import os
 import sys
@@ -12,7 +12,6 @@ from src.services.utils import Utils
 import time
 from config.settings import Settings
 from src.services.updater import Updater
-import subprocess
 
 class YouTubeDownloader(QWidget):
     """ GUI De la aplicación Axolutly """
@@ -28,12 +27,12 @@ class YouTubeDownloader(QWidget):
     def init_ui(self):
         self.setWindowTitle('Axolutly')
         self.setGeometry(100, 100, 600, 500)
-        # Ajustar ruta de iconos para PyInstaller/cx_Freeze
+        # Ajustar ruta de iconos para cx_Freeze
         icon_dir = Config.ICON_DIR
         if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
             icon_dir = os.path.join(sys._MEIPASS, "icons")
         self.setWindowIcon(QIcon(os.path.join(icon_dir, Config.ICON_YOUTUBE)))
-        self.icon_dir = icon_dir  # Guardar para uso en create_button
+        self.icon_dir = icon_dir 
 
         # Configurar el diseño principal antes de agregar la barra de menú
         main_layout = QVBoxLayout()
@@ -57,7 +56,7 @@ class YouTubeDownloader(QWidget):
 
         # Opción para actualizar yt-dlp
         update_yt_dlp_action = QAction("Actualizar yt-dlp", self)
-        update_yt_dlp_action.triggered.connect(self.update_yt_dlp)
+        update_yt_dlp_action.triggered.connect(lambda: Updater.update_yt_dlp(self))
         file_menu.addAction(update_yt_dlp_action)
 
         # Opción para salir
@@ -66,37 +65,7 @@ class YouTubeDownloader(QWidget):
         file_menu.addAction(exit_action)
 
         # Añadir la barra de menú al diseño principal
-        self.layout().setMenuBar(self.menu_bar)  # Ahora `self.layout()` no será None
-
-    def update_yt_dlp(self):
-        """Actualiza la librería yt-dlp descargando la última versión desde PyPI."""
-        try:
-            reply = QMessageBox.question(
-                self,
-                "Actualizar yt-dlp",
-                "¿Desea actualizar la librería yt-dlp a la última versión?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            if reply != QMessageBox.StandardButton.Yes:
-                return
-
-            # Ruta de la carpeta lib/yt-dlp
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            yt_dlp_dir = os.path.join(base_dir, "lib", "yt-dlp")
-
-            if not os.path.exists(yt_dlp_dir):
-                QMessageBox.critical(self, "Error", "No se encontró la carpeta de yt-dlp.")
-                return
-
-            # Descargar e instalar la última versión de yt-dlp
-            QMessageBox.information(self, "Actualización", "Iniciando la actualización de yt-dlp...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp", "--target", yt_dlp_dir])
-
-            QMessageBox.information(self, "Actualización", "La librería yt-dlp se actualizó correctamente.")
-            logger.info("yt-dlp actualizado correctamente.")
-        except Exception as e:
-            logger.error(f"Error actualizando yt-dlp: {e}")
-            QMessageBox.critical(self, "Error", f"No se pudo actualizar yt-dlp.\n{e}")
+        self.layout().setMenuBar(self.menu_bar)
 
     def setup_ui_components(self):
         main_layout = self.layout()  # Usa el diseño ya configurado en init_ui
@@ -251,7 +220,7 @@ class YouTubeDownloader(QWidget):
         return status_label
     
     def create_version_label(self):
-        version_label = QLabel("Versión: 1.1.3")
+        version_label = QLabel("Versión: 1.1.5")
         version_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         version_label.setStyleSheet("color: #888888; font-size: 10px;")
         return version_label
@@ -506,6 +475,7 @@ class YouTubeDownloader(QWidget):
         self.download_thread.finished.connect(self.download_finished)
         self.download_thread.error.connect(self.download_error)
         self.download_thread.showAuthDialog.connect(self.show_auth_dialog)
+        self.download_thread.cancelled.connect(self.handle_cancelled_download)  # <-- conectar señal cancelada
 
         self.download_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
@@ -558,17 +528,18 @@ class YouTubeDownloader(QWidget):
             self.progress_bar.setStyleSheet("QProgressBar::chunk { background-color: #ff5252; }")
             self.cancel_button.setEnabled(False)
             logger.info("Cancelación de descarga solicitada")
-            self.download_thread.cancel()
+            self.download_thread.cancel()  # Solo cancela la descarga
 
     def handle_cancelled_download(self):
         self.remove_temp_files()
-        QMessageBox.information(self, "Descarga Cancelada", "La descarga ha sido cancelada.")
+        self.progress_bar.reset()
         self.progress_bar.setValue(0)
         self.status_label.setText("")
         self.progress_bar.setStyleSheet("")
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self.open_last_download_button.setEnabled(False)
+        QMessageBox.information(self, "Descarga Cancelada", "La descarga ha sido cancelada.")
         logger.info("Descarga cancelada correctamente por el usuario")
 
     def update_progress(self, percentage: float):
@@ -625,12 +596,12 @@ class YouTubeDownloader(QWidget):
         self.show_error_message("Ocurrió un error durante la descarga. Por favor, inténtelo de nuevo.")
 
     def check_for_updates(self):
+        """Verifica si hay actualizaciones disponibles."""
         self.update_button.setEnabled(False)
         self.update_button.setText("Buscando...")
         QApplication.processEvents()
         available, info = Updater.is_new_version_available()
         if available:
-            from PyQt6.QtWidgets import QMessageBox
             reply = QMessageBox.question(
                 self,
                 "Actualización disponible",
@@ -640,7 +611,6 @@ class YouTubeDownloader(QWidget):
             if reply == QMessageBox.StandardButton.Yes:
                 Updater.download_and_apply_update(info, parent_widget=self)
         else:
-            from PyQt6.QtWidgets import QMessageBox
             QMessageBox.information(self, "Actualización", "No hay actualizaciones disponibles.")
         self.update_button.setEnabled(True)
         self.update_button.setText("Buscar actualizaciones")
