@@ -13,7 +13,7 @@ class DownloadThread(QThread):
     video_info = pyqtSignal(dict)
     requestOverwritePermission = pyqtSignal(str)
     showAuthDialog = pyqtSignal()
-    cancelled = pyqtSignal()  # señal
+    cancelled = pyqtSignal()
 
     def __init__(self, video_url, quality, audio_only, output_dir):
         super().__init__()
@@ -33,6 +33,8 @@ class DownloadThread(QThread):
         self._driver = None
         self.cookie_manager = GestorCookies(self)
         self.security = Security()
+        self.current_video_index = 0
+        self.total_videos = 0
 
     def set_auth_completed(self):
         """Maneja la completación de la autenticación"""
@@ -42,10 +44,19 @@ class DownloadThread(QThread):
         logger.info("Autenticación completada en hilo de descarga")
 
     def get_ydl_options(self):
+        # Extraer información del video específico usando C++ para máxima velocidad
+        video_info = self.security.extract_video_info(self.video_url)
+        if not video_info.is_valid:
+            raise ValueError("URL de video no válida (verificada por C++). Solo se permiten videos individuales, no playlists.")
+
+        # Construir URL limpia solo con el ID del video
+        clean_url = f"https://www.youtube.com/watch?v={video_info.video_id}"
+        self.video_url = clean_url  # Actualizar la URL para usar la versión limpia
+
         opts = {
             'outtmpl': os.path.join(
                 self.output_dir,
-                self.security.sanitize_filename('%(title)s.%(ext)s')
+                '%(title)s.%(ext)s'
             ),
             'progress_hooks': [self.progress_hook],
             'http_headers': {
@@ -55,6 +66,11 @@ class DownloadThread(QThread):
             },
             'format': f'bestvideo[height<={self.quality}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             'merge_output_format': 'mp4',
+            'quiet': True,
+            'no_warnings': True,
+            'noplaylist': True,  # Importante: esto evita que descargue la playlist completa
+            'extract_flat': False,
+            'playlist': False
         }
 
         if self.audio_only:
@@ -75,36 +91,44 @@ class DownloadThread(QThread):
         return opts
 
     def run(self):
+        temp_cookie_path = None
         try:
-            # Validar URL antes de procesar
-            if not self.security.validate_url(self.video_url):
-                self.error.emit("URL no válida o potencialmente peligrosa")
-                return
-
-            opts = self.get_ydl_options()
-            cookie_path = self.cookie_manager.get_cookie_path()
-            if cookie_path:
-                opts['cookiefile'] = cookie_path
-                logger.info(f"Usando archivo de cookies: {cookie_path}")
-
-            with YoutubeDL(opts) as ydl:
+            with YoutubeDL(self.get_ydl_options()) as ydl:
+                # Extraer información del video antes de descargar
                 info = ydl.extract_info(self.video_url, download=False)
         except Exception as e:
             if "age" in str(e).lower() or "restricted" in str(e).lower():
                 logger.info("Restricción de edad detectada. Solicitando autenticación...")
                 # Solo aquí se llama a update_cookies (que puede usar Selenium)
-                cookie_path = self.cookie_manager.update_cookies()
+                cookie_path = self.cookie_manager.get_cookie_path()
+                if not cookie_path:
+                    cookie_path = self.cookie_manager.update_cookies()
                 opts = self.get_ydl_options()
                 if cookie_path:
-                    opts['cookiefile'] = cookie_path
-                    logger.info(f"Usando archivo de cookies tras autenticación: {cookie_path}")
+                    # DESCIFRAR cookies a archivo temporal
+                    import tempfile
+                    temp_cookie = tempfile.NamedTemporaryFile(delete=False, mode='w', encoding='utf-8', suffix='.txt')
+                    temp_cookie_path = temp_cookie.name
+                    temp_cookie.close()
+                    ok = self.cookie_manager._cookie_encryptor.decrypt_file(cookie_path.encode('utf-8'), temp_cookie_path.encode('utf-8'))
+                    if not ok:
+                        logger.error("Error descifrando archivo de cookies con DLL para yt-dlp.")
+                        self.error.emit("Error descifrando archivo de cookies para autenticación.")
+                        return
+                    opts['cookiefile'] = temp_cookie_path
+                    logger.info(f"Usando archivo de cookies temporal descifrado: {temp_cookie_path}")
                 try:
                     with YoutubeDL(opts) as ydl:
                         info = ydl.extract_info(self.video_url, download=False)
                 except Exception as e2:
                     logger.error(f"Error tras actualizar cookies: {e2}")
                     self.error.emit(f"Error tras actualizar cookies: {e2}")
+                    if temp_cookie_path and os.path.exists(temp_cookie_path):
+                        os.remove(temp_cookie_path)
                     return
+                finally:
+                    if temp_cookie_path and os.path.exists(temp_cookie_path):
+                        os.remove(temp_cookie_path)
             else:
                 logger.error(f"Error extrayendo información: {e}")
                 self.error.emit(f"Error extrayendo información: {e}")
@@ -135,8 +159,19 @@ class DownloadThread(QThread):
         try:
             opts = self.get_ydl_options()
             cookie_path = self.cookie_manager.get_cookie_path()
+            temp_cookie_path = None
             if cookie_path:
-                opts['cookiefile'] = cookie_path
+                # DESCIFRAR cookies a archivo temporal
+                import tempfile
+                temp_cookie = tempfile.NamedTemporaryFile(delete=False, mode='w', encoding='utf-8', suffix='.txt')
+                temp_cookie_path = temp_cookie.name
+                temp_cookie.close()
+                ok = self.cookie_manager._cookie_encryptor.decrypt_file(cookie_path.encode('utf-8'), temp_cookie_path.encode('utf-8'))
+                if not ok:
+                    logger.error("Error descifrando archivo de cookies con DLL para descarga.")
+                    self.error.emit("Error descifrando archivo de cookies para descarga.")
+                    return
+                opts['cookiefile'] = temp_cookie_path
             with YoutubeDL(opts) as ydl:
                 ydl.download([self.video_url])
         except DownloadCancelled:
@@ -149,6 +184,9 @@ class DownloadThread(QThread):
                 return
             self.error.emit(f"Error en la descarga: {e}")
             return
+        finally:
+            if temp_cookie_path and os.path.exists(temp_cookie_path):
+                os.remove(temp_cookie_path)
 
         if self._cancelled:
             self.cleanup_temp_files()

@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (QApplication, QWidget, QPushButton, QLabel, QVBoxLayout, QHBoxLayout,
-                            QLineEdit, QCheckBox, QComboBox, QFileDialog, QMessageBox, QMenuBar, QMenu)
+                            QLineEdit, QCheckBox, QComboBox, QFileDialog, QMessageBox, QMenuBar, QMenu, QGraphicsOpacityEffect, QGraphicsDropShadowEffect)
 from PyQt6.QtGui import QIcon, QAction
-from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QSequentialAnimationGroup, QPauseAnimation, QEasingCurve
+from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QSequentialAnimationGroup, QPauseAnimation, QEasingCurve, QTimer
 import os
 import sys
 from Animation.Animation import AnimatedProgressBar
@@ -30,7 +30,7 @@ class YouTubeDownloader(QWidget):
         # Ajustar ruta de iconos para cx_Freeze
         icon_dir = Config.ICON_DIR
         if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-            icon_dir = os.path.join(sys._MEIPASS, "icons")
+            icon_dir = os.path.join(getattr(sys, '_MEIPASS', ''), "icons")
         self.setWindowIcon(QIcon(os.path.join(icon_dir, Config.ICON_YOUTUBE)))
         self.icon_dir = icon_dir 
 
@@ -44,6 +44,8 @@ class YouTubeDownloader(QWidget):
 
         self.setup_ui_components()
         self.apply_styles()
+        self.setup_hover_animations()
+        self.enable_smooth_transitions()
         self.center_on_screen()
         if Config.APP_MODE == "development":
             logger.debug("Interfaz de usuario inicializada")
@@ -65,42 +67,130 @@ class YouTubeDownloader(QWidget):
         file_menu.addAction(exit_action)
 
         # Añadir la barra de menú al diseño principal
-        self.layout().setMenuBar(self.menu_bar)
+        layout = self.layout()
+        if layout is not None and hasattr(layout, 'setMenuBar'):
+            layout.setMenuBar(self.menu_bar)
 
     def setup_ui_components(self):
         main_layout = self.layout()  # Usa el diseño ya configurado en init_ui
-        main_layout.setContentsMargins(30, 30, 30, 30)
-        main_layout.setSpacing(20)
+        if main_layout is not None:
+            main_layout.setContentsMargins(30, 30, 30, 30)
+            main_layout.setSpacing(20)
 
-        self.title_label = self.create_title_label()
-        self.url_input = self.create_url_input()
-        self.options_layout = self.create_options_layout()
-        
-        self.download_button = self.create_button("Descargar", Config.ICON_DOWNLOAD, self.start_download, "download_button")
-        self.cancel_button = self.create_button("Cancelar", Config.ICON_CANCEL, self.cancel_download, "cancel_button", enabled=False)
-        self.open_last_download_button = self.create_button("Abrir última descarga", Config.ICON_FOLDER, self.open_last_download, "open_last_download_button", enabled=False)
-        
-        buttons_layout = QHBoxLayout()
-        buttons_layout.addWidget(self.download_button)
-        buttons_layout.addWidget(self.cancel_button)
-        
-        main_layout.addWidget(self.title_label)
-        main_layout.addWidget(self.url_input)
-        main_layout.addLayout(self.options_layout)
-        main_layout.addLayout(buttons_layout)
-        main_layout.addWidget(self.open_last_download_button)
-        self.progress_bar = self.create_progress_bar()
-        self.status_label = self.create_status_label()
-        main_layout.addWidget(self.progress_bar)
-        main_layout.addWidget(self.status_label)
-        self.version_label = self.create_version_label()
-        main_layout.addWidget(self.version_label)
+            self.title_label = self.create_title_label()
+            self.url_input = self.create_url_input()
+            self.options_layout = self.create_options_layout()
+            
+            self.download_button = self.create_button("Descargar", Config.ICON_DOWNLOAD, self.start_download, "download_button")
+            self.cancel_button = self.create_button("Cancelar", Config.ICON_CANCEL, self.cancel_download, "cancel_button", enabled=False)
+            self.open_last_download_button = self.create_button("Abrir última descarga", Config.ICON_FOLDER, self.open_last_download, "open_last_download_button", enabled=False)
+            
+            # Integrar animaciones de opacidad en los botones principales
+            self.setup_button_animations([self.download_button, self.cancel_button, self.open_last_download_button])
+            # Agregar sombra a los botones principales
+            self.add_shadow_effect(self.download_button)
+            self.add_shadow_effect(self.cancel_button)
+            self.add_shadow_effect(self.open_last_download_button)
 
-        # Botón de actualización
-        self.update_button = QPushButton("Buscar actualizaciones")
-        self.update_button.setObjectName("update_button")
-        self.update_button.clicked.connect(self.check_for_updates)
-        main_layout.addWidget(self.update_button)
+            buttons_layout = QHBoxLayout()
+            buttons_layout.addWidget(self.download_button)
+            buttons_layout.addWidget(self.cancel_button)
+            
+            # Añadir layouts secundarios usando widgets contenedores para evitar el error de addLayout
+            if main_layout is not None:
+                main_layout.addWidget(self.title_label)
+                main_layout.addWidget(self.url_input)
+                options_widget = QWidget()
+                options_widget.setLayout(self.options_layout)
+                main_layout.addWidget(options_widget)
+                buttons_widget = QWidget()
+                buttons_widget.setLayout(buttons_layout)
+                main_layout.addWidget(buttons_widget)
+                main_layout.addWidget(self.open_last_download_button)
+                self.progress_bar = self.create_progress_bar()
+                self.status_label = self.create_status_label()
+                main_layout.addWidget(self.progress_bar)
+                main_layout.addWidget(self.status_label)
+                self.version_label = self.create_version_label()
+                main_layout.addWidget(self.version_label)
+                
+                # Botón de actualización
+                self.update_button = QPushButton("Buscar actualizaciones")
+                self.update_button.setObjectName("update_button")
+                self.update_button.clicked.connect(self.check_for_updates)
+                if main_layout is not None:
+                    main_layout.addWidget(self.update_button)
+
+    def add_shadow_effect(self, button):
+        """Agrega un efecto de sombra (box-shadow) a un botón usando QGraphicsDropShadowEffect."""
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(16)
+        shadow.setOffset(0, 4)
+        shadow.setColor(Qt.GlobalColor.black)
+        # Si ya hay un efecto de opacidad, lo anidamos correctamente
+        if button.graphicsEffect():
+            effect = button.graphicsEffect()
+            # Creamos un widget contenedor para ambos efectos si es necesario
+            # (PyQt6 no soporta múltiples efectos directos, así que priorizamos la sombra visual)
+            button.setGraphicsEffect(shadow)
+            button._shadow_effect = shadow
+            button._opacity_effect = effect
+        else:
+            button.setGraphicsEffect(shadow)
+            button._shadow_effect = shadow
+
+    def setup_button_animations(self, buttons):
+        """Aplica animación de opacidad y escala a una lista de botones (simula hover/click)."""
+        for button in buttons:
+            # Efecto de opacidad
+            opacity_effect = QGraphicsOpacityEffect(button)
+            button.setGraphicsEffect(opacity_effect)
+            button._opacity_effect = opacity_effect
+            # Animación de opacidad para click
+            animation = QPropertyAnimation(opacity_effect, b"opacity", button)
+            animation.setDuration(120)
+            animation.setStartValue(1.0)
+            animation.setEndValue(0.7)
+            animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+            # Animación de opacidad para soltar
+            animation_back = QPropertyAnimation(opacity_effect, b"opacity", button)
+            animation_back.setDuration(120)
+            animation_back.setStartValue(0.7)
+            animation_back.setEndValue(1.0)
+            animation_back.setEasingCurve(QEasingCurve.Type.InOutQuad)
+            # Animación de escala (simula transform: scale)
+            # No se puede escalar directamente QPushButton, pero podemos simularlo con geometry
+            scale_anim = QPropertyAnimation(button, b"geometry", button)
+            scale_anim.setDuration(120)
+            scale_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+            scale_back_anim = QPropertyAnimation(button, b"geometry", button)
+            scale_back_anim.setDuration(120)
+            scale_back_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+            def enterEvent(event, btn=button, anim=scale_anim):
+                rect = btn.geometry()
+                anim.stop()
+                anim.setStartValue(rect)
+                anim.setEndValue(rect.adjusted(-2, -2, 2, 2))
+                anim.start()
+                event.accept()
+            def leaveEvent(event, btn=button, anim=scale_back_anim):
+                rect = btn.geometry()
+                anim.stop()
+                anim.setStartValue(rect)
+                anim.setEndValue(rect.adjusted(2, 2, -2, -2))
+                anim.start()
+                event.accept()
+            def mousePressEvent(event, btn=button, anim=animation):
+                anim.start()
+                QPushButton.mousePressEvent(btn, event)
+            def mouseReleaseEvent(event, btn=button, anim=animation_back):
+                anim_back = animation_back
+                anim_back.start()
+                QPushButton.mouseReleaseEvent(btn, event)
+            button.enterEvent = enterEvent
+            button.leaveEvent = leaveEvent
+            button.mousePressEvent = mousePressEvent
+            button.mouseReleaseEvent = mouseReleaseEvent
 
     def create_button(self, text, icon_name, slot, object_name, enabled=True):
         button = QPushButton(text)
@@ -111,7 +201,6 @@ class YouTubeDownloader(QWidget):
         button.setIconSize(QSize(24, 24))
         button.clicked.connect(slot)
         button.setEnabled(enabled)
-        self.add_button_animation(button)
         return button
 
     def create_title_label(self):
@@ -134,35 +223,28 @@ class YouTubeDownloader(QWidget):
         
     def create_options_layout(self):
         options_layout = QHBoxLayout()
-        
         # Contenedor para calidad y modo audio
         media_options = QHBoxLayout()
-        
         self.quality_combo = QComboBox()
         self.quality_combo.addItems(["2160p (4K)", "1440p (2K)", "1080p (FHD)", "720p (HD)", 
                                     "480p", "360p", "240p", "144p"])
-        
         # Corregir la forma de obtener la calidad predeterminada
         default_quality = self.settings.get('default_quality', "1080p")
         default_quality_text = next((q for q in ["2160p (4K)", "1440p (2K)", "1080p (FHD)", "720p (HD)", 
                                                 "480p", "360p", "240p", "144p"] 
                                     if q.startswith(default_quality)), "1080p (FHD)")
-        
         self.quality_combo.setCurrentText(default_quality_text)
         self.quality_combo.setObjectName("quality_combo")
         self.quality_combo.setToolTip("Seleccione la calidad del video")
-        
-        # Conectar la señal de cambio del combobox para guardar la preferencia
         self.quality_combo.currentTextChanged.connect(self.save_quality_preference)
-        
         media_options.addWidget(self.quality_combo)
-
         self.audio_only_checkbox = QCheckBox("Solo audio")
         self.audio_only_checkbox.setChecked(self.settings.get('audio_only', False))
         self.audio_only_checkbox.setToolTip("Descargar solo el audio en formato MP3")
         self.audio_only_checkbox.stateChanged.connect(self.toggle_quality_selector)
         media_options.addWidget(self.audio_only_checkbox)
-        
+        # Estado inicial del combo de calidad según el checkbox
+        self.quality_combo.setEnabled(not self.audio_only_checkbox.isChecked())
         # Botón de cambio de tema mejorado
         self.theme_button = QPushButton()
         self.theme_button.setObjectName("theme_button")
@@ -170,11 +252,9 @@ class YouTubeDownloader(QWidget):
         self.theme_button.setToolTip("Cambiar a tema claro" if self.dark_mode else "Cambiar a tema oscuro")
         self.theme_button.clicked.connect(self.toggle_theme)
         self.theme_button.setFixedSize(40, 40)
-        
         options_layout.addLayout(media_options)
         options_layout.addStretch()
         options_layout.addWidget(self.theme_button)
-        
         return options_layout
 
     def toggle_quality_selector(self, state):
@@ -220,7 +300,7 @@ class YouTubeDownloader(QWidget):
         return status_label
     
     def create_version_label(self):
-        version_label = QLabel("Versión: 1.1.5")
+        version_label = QLabel("Versión: 1.2.0")
         version_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         version_label.setStyleSheet("color: #888888; font-size: 10px;")
         return version_label
@@ -249,7 +329,7 @@ class YouTubeDownloader(QWidget):
                 event.ignore()
 
     def remove_temp_files(self):
-        if not hasattr(self.download_thread, 'output_dir'):
+        if self.download_thread is None or not hasattr(self.download_thread, 'output_dir'):
             return
 
         output_dir = self.download_thread.output_dir
@@ -273,157 +353,133 @@ class YouTubeDownloader(QWidget):
                     logger.error(f"No se pudo eliminar el archivo temporal tras varios intentos (posiblemente sigue en uso): {full_path}")
 
     def apply_styles(self):
-        if self.dark_mode:
-            self.setStyleSheet("""
-                QWidget {
-                    background-color: #1e1e1e;
-                    color: #ffffff;
-                    font-family: "Roboto", "Segoe UI", "Arial", sans-serif;
-                }
-                QLabel {
-                    font-size: 16px;
-                    color: #ffffff;
-                }
-                QLabel#title {
-                    font-size: 28px;
-                    font-weight: bold;
-                    color: #ff4545;
-                    margin-bottom: 20px;
-                }
-                QLineEdit, QComboBox {
-                    padding: 10px;
-                    border: 2px solid #333333;
-                    border-radius: 8px;
-                    font-size: 16px;
-                    background-color: #2d2d2d;
-                    color: #ffffff;
-                }
-                QLineEdit:focus, QComboBox:focus {
-                    border-color: #505050;
-                }
-                QPushButton {
-                    padding: 12px;
-                    font-size: 16px;
-                    font-weight: bold;
-                    border: none;
-                    border-radius: 8px;
-                }
-                QPushButton#download_button {
-                    background-color: #2962ff;
-                    color: white;
-                }
-                QPushButton#download_button:hover {
-                    background-color: #1e4bd8;
-                }
-                QPushButton#cancel_button {
-                    background-color: #ff5252;
-                    color: white;
-                }
-                /* Agregamos estilos para el botón de "Abrir última descarga" */
-                QPushButton#open_last_download_button {
-                    background-color: #ffab40;
-                    color: white;
-                }
-                QPushButton#open_last_download_button:enabled {
-                    background-color: #ffab40;
-                    color: white;
-                }
-                QPushButton#open_last_download_button:hover:enabled {
-                    background-color: #ffa000;
-                }
-                QPushButton#open_last_download_button:pressed:enabled {
-                    background-color: #ff8f00;
-                }
-                QPushButton#theme_button {
-                    background-color: #333333;
-                    border-radius: 20px;
-                    padding: 5px;
-                    font-size: 18px;
-                    min-width: 40px;
-                    min-height: 40px;
-                    border: none;
-                    outline: none;
-                }
-                QPushButton#theme_button:hover {
-                    background-color: #404040;
-                    border-radius: 20px;
-                }
-                QPushButton#theme_button:pressed {
-                    background-color: #505050;
-                    border-radius: 20px;
-                }
-                QPushButton#theme_button:focus {
-                    border: none;
-                    outline: none;
-                    border-radius: 20px;
-                }
-                QPushButton#theme_button:focus:!pressed {
-                    background-color: #333333;
-                    border-radius: 20px;
-                }
-                QProgressBar {
-                    border: 2px solid #333333;
-                    border-radius: 8px;
-                    text-align: center;
-                    height: 30px;
-                    background-color: #2d2d2d;
-                    color: #ffffff;
-                }
-                QProgressBar::chunk {
-                    background-color: #2962ff;
-                    border-radius: 6px;
-                }
-                QCheckBox {
-                    font-size: 16px;
-                    color: #ffffff;
-                }
-                QCheckBox::indicator {
-                    width: 20px;
-                    height: 20px;
-                    background-color: #2d2d2d;
-                    border: 2px solid #404040;
-                    border-radius: 4px;
-                }
-                QCheckBox::indicator:checked {
-                    background-color: #2962ff;
-                }
-            """)
-        else:
-            self.setStyleSheet("""
-                QWidget {background-color: #f0f2f5;color: #333333;font-family: "Roboto", "Segoe UI", "Arial", sans-serif;}
-                QLabel {font-size: 16px;color: #444444;}
-                QLabel#title {font-size: 28px;font-weight: bold;color: #ff2d00;margin-bottom: 20px;}
-                QLineEdit, QComboBox { padding: 10px;border: 2px solid #e0e0e0;border-radius: 8px;font-size: 16px;background-color: #ffffff;}
-                QLineEdit:focus, QComboBox:focus {border-color: #e0e0e0;}
-                QPushButton { padding: 12px;font-size: 16px;font-weight: bold;border: none;border-radius: 8px;}
-                QPushButton#download_button { background-color: #007aff; color: white;}
-                QPushButton#download_button:hover {background-color: #005bb5;}
-                QPushButton#download_button:pressed {background-color: #003f7f;}
-                QPushButton#cancel_button { background-color: #ff5252;color: white;}
-                QPushButton#cancel_button:hover {background-color: #e04848;}
-                QPushButton#cancel_button:pressed {background-color: #b03a3a;}
-                QPushButton#cancel_button:disabled { background-color: #ffcccb; color: #808080;}
-                QPushButton#open_last_download_button { background-color: #e0e0e0; color: #333333;}
-                QPushButton#open_last_download_button:enabled { background-color: #ff9500; color: white;}
-                QPushButton#open_last_download_button:hover:enabled { background-color: #cc7a00; }
-                QPushButton#open_last_download_button:pressed:enabled { background-color: #995c00; }
-                QPushButton#theme_button {background-color: #e0e0e0; border-radius: 20px; padding: 5px; font-size: 18px; min-width: 40px; min-height: 40px; border: none; outline: none;}
-                QPushButton#theme_button:hover {background-color: #d0d0d0; border-radius: 20px;}
-                QPushButton#theme_button:pressed {background-color: #c0c0c0; border-radius: 20px;}
-                QPushButton#theme_button:focus {border: none; outline: none; border-radius: 20px;}
-                QPushButton#theme_button:focus:!pressed {background-color: #e0e0e0; border-radius: 20px;}
-                QProgressBar { border: 2px solid #e0e0e0; border-radius: 8px; text-align: center; height: 30px;background-color: #f0f0f0;}
-                QProgressBar::chunk {background-color: #007aff; border-radius: 6px;}
-                QCheckBox {font-size: 16px;}
-                QCheckBox::indicator {width: 20px; height: 20px; }
-            """)
+        # Cargar el archivo CSS externo y aplicar el tema correspondiente
+        css_path = os.path.join(os.path.dirname(__file__), "axolutly_styles.css")
+        theme = 'dark' if self.dark_mode else 'light'
+        css = ""
+        if os.path.exists(css_path):
+            with open(css_path, encoding="utf-8") as f:
+                css = f.read()
+            # Reemplazar los selectores para el tema activo
+            css = css.replace('[theme="dark"]', '' if self.dark_mode else '[theme="dark"]')
+            css = css.replace('[theme="light"]', '' if not self.dark_mode else '[theme="light"]')
+        self.setStyleSheet(css)
         logger.debug(f"Estilo {'oscuro' if self.dark_mode else 'claro'} aplicado")
 
+    def setup_hover_animations(self):
+        """
+        Sistema de animaciones mejorado para botones usando PyQt6
+        """
+        from PyQt6.QtWidgets import QGraphicsOpacityEffect
+        from PyQt6.QtCore import QPropertyAnimation, QEasingCurve
+
+        def add_opacity_animation(button):
+            effect = QGraphicsOpacityEffect(button)
+            button.setGraphicsEffect(effect)
+            animation = QPropertyAnimation(effect, b"opacity")
+            animation.setDuration(180)
+            animation.setStartValue(1.0)
+            animation.setEndValue(0.7)
+            animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+
+            # Guardar referencias para evitar que el GC elimine la animación
+            button._opacity_effect = effect
+            button._opacity_animation = animation
+
+            original_enter = getattr(button, 'enterEvent', None)
+            original_leave = getattr(button, 'leaveEvent', None)
+
+            def enterEvent(event):
+                if original_enter:
+                    original_enter(event)
+                animation.setDirection(QPropertyAnimation.Direction.Forward)
+                animation.start()
+
+            def leaveEvent(event):
+                if original_leave:
+                    original_leave(event)
+                animation.setDirection(QPropertyAnimation.Direction.Backward)
+                animation.start()
+
+            button.enterEvent = enterEvent
+            button.leaveEvent = leaveEvent
+
+        # Aplica animación de opacidad a los botones principales
+        if hasattr(self, 'download_button'):
+            add_opacity_animation(self.download_button)
+        if hasattr(self, 'cancel_button'):
+            add_opacity_animation(self.cancel_button)
+        if hasattr(self, 'open_last_download_button'):
+            add_opacity_animation(self.open_last_download_button)
+        if hasattr(self, 'theme_button'):
+            add_opacity_animation(self.theme_button)
+
+    def enable_smooth_transitions(self):
+        """
+        Habilita transiciones suaves para cambios de tema en PyQt6
+        """
+        def fade_transition():
+            # Crear efecto de opacidad para la transición
+            effect = QGraphicsOpacityEffect(self)
+            self.setGraphicsEffect(effect)
+            
+            # Configurar animación de fade out
+            fade_out = QPropertyAnimation(effect, b"opacity")
+            fade_out.setDuration(150)
+            fade_out.setStartValue(1.0)
+            fade_out.setEndValue(0.0)
+            fade_out.setEasingCurve(QEasingCurve.Type.InOutQuad)
+            
+            # Configurar animación de fade in
+            fade_in = QPropertyAnimation(effect, b"opacity")
+            fade_in.setDuration(150)
+            fade_in.setStartValue(0.0)
+            fade_in.setEndValue(1.0)
+            fade_in.setEasingCurve(QEasingCurve.Type.InOutQuad)
+            
+            # Crear grupo de animaciones secuencial
+            sequence = QSequentialAnimationGroup()
+            sequence.addAnimation(fade_out)
+            sequence.addAnimation(fade_in)
+            
+            # Ejecutar el cambio de tema durante la transición
+            def on_fade_out_finished():
+                self.apply_styles()
+                fade_in.start()
+            
+            fade_out.finished.connect(on_fade_out_finished)
+            fade_out.start()
+
+        # Conectar la transición al cambio de tema
+        if hasattr(self, 'toggle_theme'):
+            original_toggle = self.toggle_theme
+            def new_toggle():
+                original_toggle()
+                fade_transition()
+            self.toggle_theme = new_toggle
+
     def center_on_screen(self):
-        qr = self.frameGeometry()
-        cp = QApplication.primaryScreen().availableGeometry().center()
-        qr.moveCenter(cp)
-        self.move(qr.topLeft())
+        """
+        Centra la ventana en la pantalla, ajustando tanto X como Y con un offset vertical
+        """
+        screen = QApplication.primaryScreen()
+        if screen is not None:
+            # Obtener el área disponible de la pantalla (excluyendo la barra de tareas)
+            available_geometry = screen.availableGeometry()
+            
+            # Obtener el tamaño real de la ventana incluyendo decoraciones
+            frame_geometry = self.frameGeometry()
+            
+            # Calcular las coordenadas centrales con un offset vertical
+            x = available_geometry.center().x() - frame_geometry.width() // 2
+            y = available_geometry.center().y() - frame_geometry.height() // 2
+            
+            # Aplicar offset vertical para compensar
+            vertical_offset = 60  # Ajustar este valor según sea necesario
+            y = max(0, y - vertical_offset)
+            
+            # Mover la ventana a la posición calculada
+            self.move(x, y)
 
     def validate_youtube_url(self, url):
         return Utils.validate_youtube_url(url)
@@ -431,7 +487,7 @@ class YouTubeDownloader(QWidget):
     def open_last_download(self):
         if self.last_download_path:
             sanitized_path = Utils.sanitize_filepath(self.last_download_path)
-            if os.path.exists(sanitized_path):
+            if sanitized_path and os.path.exists(sanitized_path):
                 import sys, subprocess
                 if sys.platform.startswith("win"):
                     subprocess.run(["explorer", "/select,", sanitized_path])
@@ -520,6 +576,8 @@ class YouTubeDownloader(QWidget):
                     f"El archivo '{file_name}' ya existe. ¿Desea sobrescribirlo?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
                 )
+        if not self.download_thread or not hasattr(self.download_thread, 'set_overwrite_answer'):
+            return
         self.download_thread.set_overwrite_answer(reply == QMessageBox.StandardButton.Yes)
 
     def cancel_download(self):
