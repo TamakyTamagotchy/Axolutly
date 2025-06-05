@@ -7,8 +7,9 @@ import threading
 import tempfile
 import hashlib  # <--- Añadido para soporte de SHA256
 from PyQt6.QtWidgets import QMessageBox, QApplication
-from config.logger import logger
+from config.logger import logger, Config
 
+version_axo= Config.VERSION
 class YtDlpUpdateThread(threading.Thread):
     def __init__(self, parent_widget=None):
         super().__init__()
@@ -67,7 +68,7 @@ class Updater:
     DOWNLOAD_BASE_URL = "https://github.com/TamakyTamagotchy/Axolutly/releases/download"
 
     @staticmethod
-    def is_new_version_available(current_version="1.2.0"):
+    def is_new_version_available(current_version=version_axo):
         try:
             response = requests.get(Updater.REPO_URL, timeout=10)
             response.raise_for_status()

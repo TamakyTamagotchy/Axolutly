@@ -23,7 +23,7 @@ class Security:
         # Protección anti-tampering antes de inicializar cualquier lógica sensible
         anti = AntiTampering()
         if not anti.is_safe_environment():
-            logger.critical("Entorno inseguro detectado (anti-tampering/security). Abortando ejecución.")
+            logger.critical("Entorno inseguro detectado. Abortando ejecución.")
             raise RuntimeError("Entorno inseguro detectado. La aplicación se cerrará.")
 
         # Cargar la librería C++

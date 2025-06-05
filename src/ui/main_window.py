@@ -13,6 +13,7 @@ import time
 from config.settings import Settings
 from src.services.updater import Updater
 
+version = "Version "+ Config.VERSION
 class YouTubeDownloader(QWidget):
     """ GUI De la aplicación Axolutly """
     def __init__(self):
@@ -300,7 +301,7 @@ class YouTubeDownloader(QWidget):
         return status_label
     
     def create_version_label(self):
-        version_label = QLabel("Versión: 1.2.0")
+        version_label = QLabel(f"{version}")
         version_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         version_label.setStyleSheet("color: #888888; font-size: 10px;")
         return version_label

@@ -10,7 +10,9 @@ from src.services.security import Security
 import tempfile
 import ctypes
 from src.services.anti_tampering import AntiTampering
-
+from config.logger import Config
+# Definir la versión de la aplicación
+version = "v "+Config.VERSION
 class GestorCookies:
     def __init__(self, parent=None):
         # Protección anti-tampering antes de inicializar cualquier lógica sensible
@@ -25,7 +27,7 @@ class GestorCookies:
         self.settings = Settings()
         self._setup_cookie_cleanup()
         self.security = Security()
-
+        
         # Cargar la DLL de cifrado
         dll_path = os.path.join(os.path.dirname(__file__), "encryptor.dll")
         self._cookie_encryptor = ctypes.CDLL(dll_path)
@@ -110,7 +112,7 @@ class GestorCookies:
                     options.add_argument("--no-sandbox")
                     options.add_argument("--disable-dev-shm-usage")
                     options.add_argument("--disable-extensions")
-                    options.add_argument(f"--user-agent=Axolutly v1.2.0")
+                    options.add_argument(f"--user-agent=Axolutly {version}")
                     options.binary_location = browser_path
                     service = ChromeService(executable_path=ChromeDriverManager().install())
                     self._driver = webdriver.Chrome(options=options, service=service)
@@ -134,7 +136,7 @@ class GestorCookies:
                     options.add_argument("--window-size=360,720")
                     options.add_argument("--disable-dev-shm-usage")
                     options.add_argument("--disable-extensions")
-                    options.add_argument(f"--user-agent=Axolutly v1.2.0")
+                    options.add_argument(f"--user-agent=Axolutly {version}")
                     options.binary_location = browser_path
                     service = ChromeService(executable_path=OperaDriverManager().install())
                     self._driver = webdriver.Chrome(options=options, service=service)
@@ -156,7 +158,7 @@ class GestorCookies:
                     edge_options.add_argument("--disable-notifications")
                     edge_options.add_argument("--disable-web-security")
                     edge_options.add_argument("--allow-running-insecure-content")
-                    edge_options.add_argument("--user-agent=Axolutly v1.2.0")
+                    edge_options.add_argument(f"--user-agent=Axolutly {version}")
                     edge_options.binary_location = browser_path
                     edge_service = EdgeService(executable_path=EdgeChromiumDriverManager().install())
                     self._driver = webdriver.Edge(options=edge_options, service=edge_service)
