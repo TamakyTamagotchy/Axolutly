@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import browser_cookie3
 import hashlib
@@ -27,9 +28,15 @@ class GestorCookies:
         self.settings = Settings()
         self._setup_cookie_cleanup()
         self.security = Security()
-        
+        # Obtener el directorio base correcto
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+        # Cambiar el directorio actual de trabajo (opcional, si necesitas acceder a archivos relativos)
+        os.chdir(base_dir)
         # Cargar la DLL de cifrado
-        dll_path = os.path.join(os.path.dirname(__file__), "encryptor.dll")
+        dll_path = Utils.get_dll_path("encryptor.dll")
         self._cookie_encryptor = ctypes.CDLL(dll_path)
         self._cookie_encryptor.encrypt_file.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
         self._cookie_encryptor.encrypt_file.restype = ctypes.c_bool

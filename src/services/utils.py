@@ -55,9 +55,54 @@ class Utils:
             return False
 
     @staticmethod
+    def validate_twitch_url(url: str) -> bool:
+        """Valida si una URL corresponde a un canal, directo o VOD de Twitch."""
+        try:
+            parsed = urlparse(url)
+            if parsed.netloc.lower() not in {'twitch.tv', 'www.twitch.tv'}:
+                logger.debug(f"Dominio no válido para Twitch: {parsed.netloc}")
+                return False
+            # Ejemplo de URLs válidas:
+            # https://www.twitch.tv/videos/123456789
+            # https://www.twitch.tv/nombre_canal/clip/clipid
+            twitch_patterns = [
+                r'twitch\.tv\/videos\/\d+',  # VOD
+                r'twitch\.tv\/[\w\-]+\/clip\/[\w\-]+'  # Clip
+            ]
+            for pattern in twitch_patterns:
+                if re.search(pattern, url):
+                    logger.debug(f"URL válida de Twitch: {url}")
+                    return True
+            logger.debug(f"URL de Twitch no coincide con ningún patrón válido: {url}")
+            return False
+        except Exception as e:
+            logger.exception(f"Error validando URL de Twitch: {e}")
+            return False
+
+    @staticmethod
+    def validate_supported_url(url: str) -> bool:
+        """Valida si la URL es de YouTube o Twitch."""
+        return Utils.validate_youtube_url(url) or Utils.validate_twitch_url(url)
+
+    @staticmethod
+    def get_dll_path(dll_name: str) -> str:
+        """Obtiene la ruta correcta de un DLL tanto en desarrollo como empaquetado."""
+        if getattr(sys, 'frozen', False):
+            # Empaquetado: buscar en la carpeta de la app (o subcarpetas)
+            base_dir = os.path.dirname(sys.executable)
+            dll_path = os.path.join(base_dir, 'lib', 'src', 'services', dll_name)
+            if not os.path.exists(dll_path):
+                # Alternativa: buscar en la raíz
+                dll_path = os.path.join(base_dir, dll_name)
+        else:
+            # Desarrollo: buscar junto al archivo actual
+            dll_path = os.path.join(os.path.dirname(__file__), dll_name)
+        return dll_path
+
+    @staticmethod
     def sanitize_filename(filename: str) -> str:
         """Sanitiza un nombre de archivo usando security.dll (C++). Si falla, usa sanitize_path de yt-dlp."""
-        dll_path = os.path.join(os.path.dirname(__file__), "security.dll")
+        dll_path = Utils.get_dll_path("security.dll")
         # Solo comprobar una vez por ejecución
         if not Utils._security_dll_checked:
             Utils._security_dll_exists = os.path.exists(dll_path)
@@ -156,4 +201,20 @@ class Utils:
             return True
         except Exception as e:
             logger.exception(f"Error validando ruta: {str(e)}")
+            return False
+    
+    @staticmethod
+    def is_twitch_live_channel_url(url: str) -> bool:
+        """Detecta si la URL es solo de canal en vivo de Twitch (no VOD, no clip)."""
+        try:
+            parsed = urlparse(url)
+            if parsed.netloc.lower() not in {'twitch.tv', 'www.twitch.tv'}:
+                return False
+            # Solo canal: https://www.twitch.tv/usuario
+            # No debe contener /videos/ ni /clip/
+            path = parsed.path.strip('/').split('/')
+            if len(path) == 1 and path[0] and path[0] not in ("videos", "directory", "p", "settings", "downloads", "friends"):
+                return True
+            return False
+        except Exception:
             return False

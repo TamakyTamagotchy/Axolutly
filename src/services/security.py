@@ -9,6 +9,7 @@ from config.logger import logger
 from typing import Optional
 from dataclasses import dataclass
 from src.services.anti_tampering import AntiTampering
+from src.services.utils import Utils
 
 @dataclass
 class VideoInfo:
@@ -27,7 +28,7 @@ class Security:
             raise RuntimeError("Entorno inseguro detectado. La aplicación se cerrará.")
 
         # Cargar la librería C++
-        dll_path = os.path.join(os.path.dirname(__file__), "security.dll")
+        dll_path = Utils.get_dll_path("security.dll")
         if not os.path.exists(dll_path):
             logger.error(f"No se encontró security.dll en {dll_path}")
             self._cdll = None
@@ -35,12 +36,12 @@ class Security:
             self._cdll = ctypes.CDLL(dll_path)
 
         # Cargar la librería C++ para validación y extracción rápida de ID de video
-        dll_path = os.path.join(os.path.dirname(__file__), "quest.dll")
-        if not os.path.exists(dll_path):
-            logger.error(f"No se encontró quest.dll en {dll_path}")
+        quest_dll_path = Utils.get_dll_path("quest.dll")
+        if not os.path.exists(quest_dll_path):
+            logger.error(f"No se encontró quest.dll en {quest_dll_path}")
             self._questdll = None
         else:
-            self._questdll = ctypes.CDLL(dll_path)
+            self._questdll = ctypes.CDLL(quest_dll_path)
             self._questdll.is_valid_youtube_video.argtypes = [ctypes.c_char_p]
             self._questdll.is_valid_youtube_video.restype = ctypes.c_bool
             self._questdll.extract_video_id.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int]

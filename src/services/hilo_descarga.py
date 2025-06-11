@@ -43,7 +43,46 @@ class DownloadThread(QThread):
             self.cookie_manager.set_auth_completed()
         logger.info("Autenticación completada en hilo de descarga")
 
+    def is_twitch_url(self, url):
+        """Detecta si la URL es de Twitch (stream o VOD)."""
+        return any(domain in url for domain in ["twitch.tv", "www.twitch.tv"])
+
     def get_ydl_options(self):
+        # Soporte para Twitch
+        if self.is_twitch_url(self.video_url):
+            # Para streams en vivo y VODs de Twitch
+            opts = {
+                'outtmpl': os.path.join(
+                    self.output_dir,
+                    '%(title)s.%(ext)s'
+                ),
+                'progress_hooks': [self.progress_hook],
+                'quiet': True,
+                'no_warnings': True,
+                'noplaylist': True,
+                'extract_flat': False,
+                'playlist': False
+            }
+            # Selección de calidad para Twitch
+            # Si la calidad es "audio_only", descargar solo audio
+            if self.audio_only:
+                opts['format'] = 'bestaudio/best'
+                opts['postprocessors'] = [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }]
+            else:
+                # Para Twitch, la calidad puede ser "best", "worst", "720p", "480p", etc.
+                # Si la calidad es un número, usar ese valor, si no, usar "best"
+                fmt = str(self.quality) if self.quality else 'best'
+                opts['format'] = f'bestvideo[height<={fmt}]+bestaudio/best[height<={fmt}]/best[height<={fmt}]/best'
+            # FFMPEG
+            ffmpeg_base = os.environ.get("FFMPEG_LOCATION")
+            if ffmpeg_base and os.path.isdir(ffmpeg_base):
+                opts['ffmpeg_location'] = ffmpeg_base
+            return opts
+
         # Extraer información del video específico usando C++ para máxima velocidad
         video_info = self.security.extract_video_info(self.video_url)
         if not video_info.is_valid:
@@ -93,19 +132,30 @@ class DownloadThread(QThread):
     def run(self):
         temp_cookie_path = None
         try:
+            # Permitir cancelación ANTES de iniciar cualquier proceso
+            if self._cancelled:
+                self.cleanup_temp_files()
+                self.cancelled.emit()
+                return
             with YoutubeDL(self.get_ydl_options()) as ydl:
                 # Extraer información del video antes de descargar
                 info = ydl.extract_info(self.video_url, download=False)
+                if self._cancelled:
+                    self.cleanup_temp_files()
+                    self.cancelled.emit()
+                    return
         except Exception as e:
+            if self._cancelled:
+                self.cleanup_temp_files()
+                self.cancelled.emit()
+                return
             if "age" in str(e).lower() or "restricted" in str(e).lower():
                 logger.info("Restricción de edad detectada. Solicitando autenticación...")
-                # Solo aquí se llama a update_cookies (que puede usar Selenium)
                 cookie_path = self.cookie_manager.get_cookie_path()
                 if not cookie_path:
                     cookie_path = self.cookie_manager.update_cookies()
                 opts = self.get_ydl_options()
                 if cookie_path:
-                    # DESCIFRAR cookies a archivo temporal
                     import tempfile
                     temp_cookie = tempfile.NamedTemporaryFile(delete=False, mode='w', encoding='utf-8', suffix='.txt')
                     temp_cookie_path = temp_cookie.name
@@ -120,6 +170,10 @@ class DownloadThread(QThread):
                 try:
                     with YoutubeDL(opts) as ydl:
                         info = ydl.extract_info(self.video_url, download=False)
+                        if self._cancelled:
+                            self.cleanup_temp_files()
+                            self.cancelled.emit()
+                            return
                 except Exception as e2:
                     logger.error(f"Error tras actualizar cookies: {e2}")
                     self.error.emit(f"Error tras actualizar cookies: {e2}")
@@ -133,6 +187,11 @@ class DownloadThread(QThread):
                 logger.error(f"Error extrayendo información: {e}")
                 self.error.emit(f"Error extrayendo información: {e}")
                 return
+
+        if self._cancelled:
+            self.cleanup_temp_files()
+            self.cancelled.emit()
+            return
 
         temp_filename = ydl.prepare_filename(info)
         # Preguntar al usuario si desea sobrescribir el archivo si ya existe
@@ -161,7 +220,6 @@ class DownloadThread(QThread):
             cookie_path = self.cookie_manager.get_cookie_path()
             temp_cookie_path = None
             if cookie_path:
-                # DESCIFRAR cookies a archivo temporal
                 import tempfile
                 temp_cookie = tempfile.NamedTemporaryFile(delete=False, mode='w', encoding='utf-8', suffix='.txt')
                 temp_cookie_path = temp_cookie.name
@@ -173,6 +231,10 @@ class DownloadThread(QThread):
                     return
                 opts['cookiefile'] = temp_cookie_path
             with YoutubeDL(opts) as ydl:
+                if self._cancelled:
+                    self.cleanup_temp_files()
+                    self.cancelled.emit()
+                    return
                 ydl.download([self.video_url])
         except DownloadCancelled:
             self.cleanup_temp_files()
@@ -231,13 +293,19 @@ class DownloadThread(QThread):
     def cancel(self):
         """Marca el hilo como cancelado y detiene la descarga si es posible."""
         self._cancelled = True
-        # Si hay un gestor de cookies con Selenium abierto, ciérralo
-        if hasattr(self, "cookie_manager") and hasattr(self.cookie_manager, "_driver") and self.cookie_manager._driver:
-            try:
-                self.cookie_manager._driver.quit()
-            except Exception:
-                pass
-            self.cookie_manager._driver = None
+        # Intentar detener procesos de yt-dlp si están activos
+        try:
+            if hasattr(self, '_ydl') and self._ydl:
+                self._ydl._force_terminate = True
+                if hasattr(self._ydl, 'proc') and self._ydl.proc:
+                    self._ydl.proc.terminate()
+        except Exception:
+            pass
+        # Forzar la interrupción del hilo si está bloqueado
+        try:
+            self.terminate()
+        except Exception:
+            pass
 
     def cancel_auth(self):
         """Cancela solo la autenticación (no la descarga)."""

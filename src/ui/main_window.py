@@ -483,7 +483,8 @@ class YouTubeDownloader(QWidget):
             self.move(x, y)
 
     def validate_youtube_url(self, url):
-        return Utils.validate_youtube_url(url)
+        # Ahora acepta YouTube y Twitch
+        return Utils.validate_supported_url(url)
     
     def open_last_download(self):
         if self.last_download_path:
@@ -509,8 +510,16 @@ class YouTubeDownloader(QWidget):
 
     def start_download(self):
         url = self.url_input.text().strip()
-        if not url or not self.validate_youtube_url(url):
-            self.show_error_message("Por favor, ingrese una URL de YouTube válida.")
+        if not url:
+            self.show_error_message("Por favor, ingresa una URL.")
+            return
+        # Twitch: canal en vivo (no VOD, no clip)
+        if Utils.is_twitch_live_channel_url(url):
+            self.show_error_message("El usuario está en stream. No se puede descargar el stream en vivo de Twitch.")
+            return
+        # Validación general
+        if not Utils.validate_supported_url(url):
+            self.show_error_message("Por favor, ingresa una URL válida de YouTube o Twitch (VOD o clip).")
             return
 
         last_dir = self.settings.get('download_dir', '')
