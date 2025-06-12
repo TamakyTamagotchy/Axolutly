@@ -15,13 +15,7 @@ from config.logger import Config
 # Definir la versión de la aplicación
 version = "v "+Config.VERSION
 class GestorCookies:
-    def __init__(self, parent=None):
-        # Protección anti-tampering antes de inicializar cualquier lógica sensible
-        anti = AntiTampering()
-        if not anti.is_safe_environment():
-            logger.critical("Entorno inseguro detectado (anti-tampering/cookies). Abortando ejecución.")
-            raise RuntimeError("Entorno inseguro detectado. La aplicación se cerrará.")
-        
+    def __init__(self, parent=None):   
         self._auth_completed = False
         self._driver = None
         self.parent = parent  # Puede ser DownloadThread para señales

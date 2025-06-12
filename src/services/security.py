@@ -8,7 +8,6 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from config.logger import logger
 from typing import Optional
 from dataclasses import dataclass
-from src.services.anti_tampering import AntiTampering
 from src.services.utils import Utils
 
 @dataclass
@@ -21,12 +20,6 @@ class Security:
     Clase para funciones de seguridad: cifrado, validación de URLs, sanitización de nombres, etc.
     """
     def __init__(self):
-        # Protección anti-tampering antes de inicializar cualquier lógica sensible
-        anti = AntiTampering()
-        if not anti.is_safe_environment():
-            logger.critical("Entorno inseguro detectado. Abortando ejecución.")
-            raise RuntimeError("Entorno inseguro detectado. La aplicación se cerrará.")
-
         # Cargar la librería C++
         dll_path = Utils.get_dll_path("security.dll")
         if not os.path.exists(dll_path):

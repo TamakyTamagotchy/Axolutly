@@ -212,7 +212,7 @@ class YouTubeDownloader(QWidget):
 
     def create_url_input(self):
         url_input = QLineEdit()
-        url_input.setPlaceholderText("Ingrese la URL del video de YouTube")
+        url_input.setPlaceholderText("Pega aquí la URL de YouTube, Twitch o TikTok...")
         url_input.setObjectName("url_input")
         return url_input
 

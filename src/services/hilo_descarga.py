@@ -47,6 +47,10 @@ class DownloadThread(QThread):
         """Detecta si la URL es de Twitch (stream o VOD)."""
         return any(domain in url for domain in ["twitch.tv", "www.twitch.tv"])
 
+    def is_tiktok_url(self, url):
+        """Detecta si la URL es de TikTok."""
+        return any(domain in url for domain in ["tiktok.com", "www.tiktok.com", "vm.tiktok.com"])
+
     def get_ydl_options(self):
         # Soporte para Twitch
         if self.is_twitch_url(self.video_url):
@@ -81,6 +85,38 @@ class DownloadThread(QThread):
             ffmpeg_base = os.environ.get("FFMPEG_LOCATION")
             if ffmpeg_base and os.path.isdir(ffmpeg_base):
                 opts['ffmpeg_location'] = ffmpeg_base
+            return opts
+
+        # Soporte para TikTok
+        if self.is_tiktok_url(self.video_url):
+            opts = {
+                'outtmpl': os.path.join(
+                    self.output_dir,
+                    '%(title)s.%(ext)s'
+                ),
+                'progress_hooks': [self.progress_hook],
+                'quiet': True,
+                'no_warnings': True,
+                'noplaylist': True,
+                'extract_flat': False,
+                'playlist': False,
+                'format': 'mp4/bestvideo+bestaudio/best',
+                'merge_output_format': 'mp4',
+            }
+            # FFMPEG
+            ffmpeg_base = os.environ.get("FFMPEG_LOCATION")
+            if ffmpeg_base and os.path.isdir(ffmpeg_base):
+                opts['ffmpeg_location'] = ffmpeg_base
+            # Nombre personalizado: quitar # del título o usar video_axolutly
+            opts['postprocessors'] = [{
+                'key': 'FFmpegMetadata',
+            }]
+            opts['final_ext'] = 'mp4'
+            opts['outtmpl'] = os.path.join(
+                self.output_dir,
+                '%(description)s.%(ext)s'
+            )
+            opts['postprocessor_hooks'] = [self.tiktok_filename_hook]
             return opts
 
         # Extraer información del video específico usando C++ para máxima velocidad
@@ -316,3 +352,28 @@ class DownloadThread(QThread):
             except Exception:
                 pass
             self.cookie_manager._driver = None
+
+    def tiktok_filename_hook(self, info):
+        """Hook para ajustar el nombre del archivo descargado de TikTok."""
+        if info.get('status') == 'finished':
+            desc = info['info_dict'].get('description', '')
+            # Quitar # y limpiar nombre
+            clean = desc.replace('#', '').strip()
+            if not clean:
+                clean = 'video_axolutly'
+            import os
+            # Usar '_filename' para compatibilidad con yt-dlp
+            old_path = info['info_dict'].get('_filename') or info.get('filename')
+            if not old_path:
+                logger.error("No se pudo obtener el nombre del archivo final de TikTok (ni _filename ni filename)")
+                return None
+            ext = os.path.splitext(old_path)[1]
+            new_path = os.path.join(os.path.dirname(old_path), f"{clean}{ext}")
+            try:
+                if old_path != new_path:
+                    os.rename(old_path, new_path)
+                    info['info_dict']['_filename'] = new_path
+                    self.final_filename = new_path
+            except Exception as e:
+                logger.warning(f"No se pudo renombrar el archivo TikTok: {e}")
+        return None

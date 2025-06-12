@@ -21,7 +21,7 @@ class Config:
     MAX_LOG_SIZE = 1024 * 1024  # 1MB
     NUM_LOG_BACKUPS = 3
     APP_MODE = "production"
-    VERSION = "1.1.7"
+    VERSION = "1.1.8"
 
 def configure_logger() -> logging.Logger:
     """

@@ -80,9 +80,39 @@ class Utils:
             return False
 
     @staticmethod
+    def validate_tiktok_url(url: str) -> bool:
+        """Valida si una URL corresponde a un video de TikTok."""
+        try:
+            parsed = urlparse(url)
+            if parsed.netloc.lower() not in {'tiktok.com', 'www.tiktok.com', 'vm.tiktok.com'}:
+                logger.debug(f"Dominio no válido para TikTok: {parsed.netloc}")
+                return False
+            # Ejemplo de URLs válidas:
+            # https://www.tiktok.com/@usuario/video/1234567890123456789
+            # https://vm.tiktok.com/xxxx/
+            tiktok_patterns = [
+                r'tiktok\.com/@[\w.-]+/video/\d+',
+                r'vm\.tiktok\.com/\w+',
+                r'tiktok\.com/t/\w+',
+            ]
+            for pattern in tiktok_patterns:
+                if re.search(pattern, url):
+                    logger.debug(f"URL válida de TikTok: {url}")
+                    return True
+            logger.debug(f"URL de TikTok no coincide con ningún patrón válido: {url}")
+            return False
+        except Exception as e:
+            logger.exception(f"Error validando URL de TikTok: {e}")
+            return False
+
+    @staticmethod
     def validate_supported_url(url: str) -> bool:
-        """Valida si la URL es de YouTube o Twitch."""
-        return Utils.validate_youtube_url(url) or Utils.validate_twitch_url(url)
+        """Valida si la URL es de YouTube, Twitch o TikTok."""
+        return (
+            Utils.validate_youtube_url(url)
+            or Utils.validate_twitch_url(url)
+            or Utils.validate_tiktok_url(url)
+        )
 
     @staticmethod
     def get_dll_path(dll_name: str) -> str:
