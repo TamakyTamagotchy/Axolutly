@@ -9,6 +9,7 @@ from config.logger import logger
 from typing import Optional
 from dataclasses import dataclass
 from src.services.utils import Utils
+import re  # Importar re para expresiones regulares
 
 @dataclass
 class VideoInfo:
@@ -28,18 +29,8 @@ class Security:
         else:
             self._cdll = ctypes.CDLL(dll_path)
 
-        # Cargar la librería C++ para validación y extracción rápida de ID de video
-        quest_dll_path = Utils.get_dll_path("quest.dll")
-        if not os.path.exists(quest_dll_path):
-            logger.error(f"No se encontró quest.dll en {quest_dll_path}")
-            self._questdll = None
-        else:
-            self._questdll = ctypes.CDLL(quest_dll_path)
-            self._questdll.is_valid_youtube_video.argtypes = [ctypes.c_char_p]
-            self._questdll.is_valid_youtube_video.restype = ctypes.c_bool
-            self._questdll.extract_video_id.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int]
-            self._questdll.extract_video_id.restype = ctypes.c_bool
-
+        # Se eliminó la carga y configuración de quest.dll
+        
         # Configurar estructura para VideoInfo
         class CVideoInfo(ctypes.Structure):
             _fields_ = [("is_valid", ctypes.c_bool), ("video_id", ctypes.c_char * 32)]
@@ -143,25 +134,33 @@ class Security:
             return filename
 
     def validate_url(self, url: str) -> bool:
-        """Validación rápida de URLs de YouTube usando C++ (yt_helper.dll)."""
-        try:
-            if not self._questdll or not hasattr(self._questdll, 'is_valid_youtube_video'):
-                logger.warning("No se puede validar URL: quest.dll no cargada o función no disponible.")
-                return False
-            return self._questdll.is_valid_youtube_video(url.encode('utf-8'))
-        except Exception as e:
-            logger.error(f"Error validando url: {e}")
-            return False
+        """Validación simplificada de URLs de YouTube."""
+        # Implementación simplificada que utiliza la función de Utils
+        return Utils.is_youtube_url(url)
 
     def extract_video_info(self, url: str) -> VideoInfo:
-        """Extrae el ID del video usando C++ (yt_helper.dll)."""
+        """Extrae el ID del video usando expresiones regulares."""
         try:
-            if not self._questdll or not hasattr(self._questdll, 'extract_video_id'):
-                logger.warning("No se puede extraer info de video: quest.dll no cargada o función no disponible.")
-                return VideoInfo(is_valid=False, video_id="")
-            out_id = ctypes.create_string_buffer(32)
-            is_valid = self._questdll.extract_video_id(url.encode('utf-8'), out_id, 32)
-            return VideoInfo(is_valid=bool(is_valid), video_id=out_id.value.decode('utf-8'))
+            # Implementación sencilla usando regex en lugar de DLL
+            video_id = ""
+            is_valid = False
+            
+            # Patrones de extracción de ID de YouTube
+            patterns = [
+                r'(?:v=)([-\w]{11})',           # ?v=ID
+                r'(?:youtu\.be\/)([-\w]{11})',  # youtu.be/ID
+                r'(?:\/shorts\/)([-\w]{11})'    # /shorts/ID
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, url)
+                if match:
+                    video_id = match.group(1)
+                    is_valid = len(video_id) == 11
+                    break
+                    
+            return VideoInfo(is_valid=is_valid, video_id=video_id)
         except Exception as e:
             logger.error(f"Error extrayendo info de video: {e}")
             return VideoInfo(is_valid=False, video_id="")
+

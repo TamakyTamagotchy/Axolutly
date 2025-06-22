@@ -21,7 +21,7 @@ class Config:
     MAX_LOG_SIZE = 1024 * 1024  # 1MB
     NUM_LOG_BACKUPS = 3
     APP_MODE = "production"
-    VERSION = "1.1.8"
+    VERSION = "1.1.9"
 
 def configure_logger() -> logging.Logger:
     """
@@ -29,25 +29,42 @@ def configure_logger() -> logging.Logger:
     Añade handler de archivo rotativo y de consola en modo desarrollo.
     """
     logger = logging.getLogger('YouTubeDownloader')
+    
+    # Evitar duplicar handlers si ya está configurado
+    if logger.handlers:
+        return logger
+        
     logger.setLevel(logging.DEBUG if Config.APP_MODE == "development" else logging.INFO)
-    os.makedirs(Config.DIR_LOGS, exist_ok=True)
-    error_handler = RotatingFileHandler(
-        os.path.join(Config.DIR_LOGS, Config.ERROR_LOG_FILE),
-        maxBytes=Config.MAX_LOG_SIZE,
-        backupCount=Config.NUM_LOG_BACKUPS,
-        encoding='utf-8'
-    )
-    error_handler.setFormatter(logging.Formatter(
-        '%(asctime)s - %(levelname)s - Línea %(lineno)d\nMensaje: %(message)s\n'
-    ))
-    error_handler.setLevel(logging.ERROR)
-    logger.addHandler(error_handler)
+    
+    # Crear directorio de logs si no existe
+    try:
+        os.makedirs(Config.DIR_LOGS, exist_ok=True)
+    except OSError as e:
+        print(f"Error creando directorio de logs: {e}")
+        
+    # Handler de archivo para errores
+    try:
+        error_handler = RotatingFileHandler(
+            os.path.join(Config.DIR_LOGS, Config.ERROR_LOG_FILE),
+            maxBytes=Config.MAX_LOG_SIZE,
+            backupCount=Config.NUM_LOG_BACKUPS,
+            encoding='utf-8'
+        )
+        error_handler.setFormatter(logging.Formatter(
+            '%(asctime)s - %(levelname)s - Línea %(lineno)d\nMensaje: %(message)s\n'
+        ))
+        error_handler.setLevel(logging.ERROR)
+        logger.addHandler(error_handler)
+    except Exception as e:
+        print(f"Error configurando handler de archivo: {e}")
+        
     # Handler de consola solo en desarrollo
     if Config.APP_MODE == "development":
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
         console_handler.setLevel(logging.DEBUG)
         logger.addHandler(console_handler)
+        
     return logger
 
 logger = configure_logger()

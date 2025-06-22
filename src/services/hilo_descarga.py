@@ -1,5 +1,6 @@
 import os
 from PyQt6.QtCore import QThread, pyqtSignal, QMutex, QWaitCondition, QMutexLocker, pyqtSlot
+from PyQt6.QtWidgets import QMessageBox
 from yt_dlp import YoutubeDL
 from yt_dlp.utils import DownloadCancelled
 from config.logger import logger
@@ -119,15 +120,20 @@ class DownloadThread(QThread):
             opts['postprocessor_hooks'] = [self.tiktok_filename_hook]
             return opts
 
-        # Extraer información del video específico usando C++ para máxima velocidad
-        video_info = self.security.extract_video_info(self.video_url)
-        if not video_info.is_valid:
-            raise ValueError("URL de video no válida (verificada por C++). Solo se permiten videos individuales, no playlists.")
-
-        # Construir URL limpia solo con el ID del video
-        clean_url = f"https://www.youtube.com/watch?v={video_info.video_id}"
-        self.video_url = clean_url  # Actualizar la URL para usar la versión limpia
-
+        # Modificar esta parte para usar yt-dlp directamente para validación
+        try:
+            # Usamos directamente YouTube-DL para extraer información del video en lugar de C++
+            with YoutubeDL({'quiet': True, 'no_warnings': True}) as ydl:
+                # Intenta procesar la URL
+                info_dict = ydl.extract_info(self.video_url, download=False, process=False)
+                if info_dict and 'id' in info_dict:
+                    video_id = info_dict['id']
+                    logger.info(f"Video ID encontrado: {video_id}")
+                    # Construir URL limpia con el ID obtenido por yt-dlp
+                    self.video_url = f"https://www.youtube.com/watch?v={video_id}"
+        except Exception as e:
+            logger.warning(f"Error procesando URL con yt-dlp: {e}")
+        
         opts = {
             'outtmpl': os.path.join(
                 self.output_dir,
@@ -377,3 +383,18 @@ class DownloadThread(QThread):
             except Exception as e:
                 logger.warning(f"No se pudo renombrar el archivo TikTok: {e}")
         return None
+
+    def show_auth_dialog(self):
+        """Muestra el diálogo de autenticación de forma no bloqueante e informativa"""
+        try:
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setWindowTitle("Autenticación requerida")
+            msg.setText("Iniciando navegador para autenticación en YouTube...\n\nPor favor, inicie sesión en su cuenta.\nLa ventana se cerrará automáticamente al detectar el inicio de sesión.")
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg.buttonClicked.connect(self.handle_auth_completed)
+            msg.show()  # Usar show() en lugar de exec()
+            logger.info("Diálogo de autenticación mostrado")
+        except Exception as e:
+            logger.error(f"Error mostrando diálogo de autenticación: {e}")
+            self.show_error_message("Error en el proceso de autenticación")

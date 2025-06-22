@@ -1,10 +1,10 @@
 from PyQt6.QtWidgets import (QApplication, QWidget, QPushButton, QLabel, QVBoxLayout, QHBoxLayout,
-                            QLineEdit, QCheckBox, QComboBox, QFileDialog, QMessageBox, QMenuBar, QMenu, QGraphicsOpacityEffect, QGraphicsDropShadowEffect)
-from PyQt6.QtGui import QIcon, QAction
+                            QLineEdit, QCheckBox, QComboBox, QFileDialog, QMessageBox, QMenuBar, QMenu, QGraphicsOpacityEffect)
+from PyQt6.QtGui import QIcon, QAction, QColor
 from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QSequentialAnimationGroup, QPauseAnimation, QEasingCurve, QTimer
 import os
 import sys
-from Animation.Animation import AnimatedProgressBar
+from Animation.Animation import AnimatedProgressBar, AnimatedWidget
 from config.logger import logger
 from config.logger import Config
 from src.services.hilo_descarga import DownloadThread
@@ -22,9 +22,46 @@ class YouTubeDownloader(QWidget):
         self.last_download_path = None
         self.download_thread = None
         self.dark_mode = self.settings.get('theme') == 'dark'
+        
+        # Verificar DLLs críticas al inicio
+        self.check_critical_dlls()
+        
         self.init_ui()
         logger.info("Aplicación Axolutly iniciada")
 
+    def check_critical_dlls(self):
+        """Verifica que las DLLs críticas estén presentes y muestra advertencias si faltan"""
+        try:
+            # Se eliminó quest.dll de la lista
+            dlls_to_check = ["security.dll", "encryptor.dll", "anti_tampering.dll"]
+            missing_dlls = []
+            
+            # Comprobar en múltiples rutas posibles
+            for dll in dlls_to_check:
+                # Comprobar primero en la ruta raíz
+                if getattr(sys, 'frozen', False):
+                    app_root = os.path.dirname(sys.executable)
+                    root_path = os.path.join(app_root, dll)
+                    lib_path = os.path.join(app_root, "lib", "src", "services", dll)
+                    svc_path = os.path.join(app_root, "src", "services", dll)
+                    
+                    if not (os.path.exists(root_path) or os.path.exists(lib_path) or os.path.exists(svc_path)):
+                        missing_dlls.append(dll)
+                        logger.error(f"No se encontró {dll} en ninguna ruta esperada")
+                else:
+                    # En modo desarrollo, buscar en src/services
+                    svc_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "services", dll)
+                    if not os.path.exists(svc_path):
+                        missing_dlls.append(dll)
+                        logger.error(f"No se encontró {dll} en {svc_path}")
+        
+            if missing_dlls:
+                logger.warning(f"DLLs faltantes: {', '.join(missing_dlls)}")
+                # Solo mostrar advertencia, no bloquear inicio
+                print(f"Advertencia: Algunas DLLs críticas no se encontraron: {', '.join(missing_dlls)}")
+        except Exception as e:
+            logger.error(f"Error verificando DLLs críticas: {e}")
+    
     def init_ui(self):
         self.setWindowTitle('Axolutly')
         self.setGeometry(100, 100, 600, 500)
@@ -86,8 +123,10 @@ class YouTubeDownloader(QWidget):
             self.cancel_button = self.create_button("Cancelar", Config.ICON_CANCEL, self.cancel_download, "cancel_button", enabled=False)
             self.open_last_download_button = self.create_button("Abrir última descarga", Config.ICON_FOLDER, self.open_last_download, "open_last_download_button", enabled=False)
             
-            # Integrar animaciones de opacidad en los botones principales
-            self.setup_button_animations([self.download_button, self.cancel_button, self.open_last_download_button])
+            # Integrar animaciones de opacidad en los botones principales usando AnimatedWidget
+            buttons = [self.download_button, self.cancel_button, self.open_last_download_button]
+            for button in buttons:
+                AnimatedWidget.fade_in(button) # Aplicar efecto de entrada inicial
             # Agregar sombra a los botones principales
             self.add_shadow_effect(self.download_button)
             self.add_shadow_effect(self.cancel_button)
@@ -124,74 +163,18 @@ class YouTubeDownloader(QWidget):
 
     def add_shadow_effect(self, button):
         """Agrega un efecto de sombra (box-shadow) a un botón usando QGraphicsDropShadowEffect."""
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(16)
-        shadow.setOffset(0, 4)
-        shadow.setColor(Qt.GlobalColor.black)
-        # Si ya hay un efecto de opacidad, lo anidamos correctamente
-        if button.graphicsEffect():
-            effect = button.graphicsEffect()
-            # Creamos un widget contenedor para ambos efectos si es necesario
-            # (PyQt6 no soporta múltiples efectos directos, así que priorizamos la sombra visual)
-            button.setGraphicsEffect(shadow)
-            button._shadow_effect = shadow
-            button._opacity_effect = effect
-        else:
-            button.setGraphicsEffect(shadow)
-            button._shadow_effect = shadow
+        # Usar el color predeterminado basado en el tema
+        color = QColor(0, 0, 0, 80) if not self.dark_mode else QColor(0, 0, 0, 120)
+        # No crear efectos directamente, utilizar AnimatedWidget
+        shadow = AnimatedWidget.add_drop_shadow(button, color=color, blur_radius=16, offset=(0, 4))
+        button._shadow_effect = shadow
 
     def setup_button_animations(self, buttons):
         """Aplica animación de opacidad y escala a una lista de botones (simula hover/click)."""
         for button in buttons:
-            # Efecto de opacidad
-            opacity_effect = QGraphicsOpacityEffect(button)
-            button.setGraphicsEffect(opacity_effect)
-            button._opacity_effect = opacity_effect
-            # Animación de opacidad para click
-            animation = QPropertyAnimation(opacity_effect, b"opacity", button)
-            animation.setDuration(120)
-            animation.setStartValue(1.0)
-            animation.setEndValue(0.7)
-            animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
-            # Animación de opacidad para soltar
-            animation_back = QPropertyAnimation(opacity_effect, b"opacity", button)
-            animation_back.setDuration(120)
-            animation_back.setStartValue(0.7)
-            animation_back.setEndValue(1.0)
-            animation_back.setEasingCurve(QEasingCurve.Type.InOutQuad)
-            # Animación de escala (simula transform: scale)
-            # No se puede escalar directamente QPushButton, pero podemos simularlo con geometry
-            scale_anim = QPropertyAnimation(button, b"geometry", button)
-            scale_anim.setDuration(120)
-            scale_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
-            scale_back_anim = QPropertyAnimation(button, b"geometry", button)
-            scale_back_anim.setDuration(120)
-            scale_back_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
-            def enterEvent(event, btn=button, anim=scale_anim):
-                rect = btn.geometry()
-                anim.stop()
-                anim.setStartValue(rect)
-                anim.setEndValue(rect.adjusted(-2, -2, 2, 2))
-                anim.start()
-                event.accept()
-            def leaveEvent(event, btn=button, anim=scale_back_anim):
-                rect = btn.geometry()
-                anim.stop()
-                anim.setStartValue(rect)
-                anim.setEndValue(rect.adjusted(2, 2, -2, -2))
-                anim.start()
-                event.accept()
-            def mousePressEvent(event, btn=button, anim=animation):
-                anim.start()
-                QPushButton.mousePressEvent(btn, event)
-            def mouseReleaseEvent(event, btn=button, anim=animation_back):
-                anim_back = animation_back
-                anim_back.start()
-                QPushButton.mouseReleaseEvent(btn, event)
-            button.enterEvent = enterEvent
-            button.leaveEvent = leaveEvent
-            button.mousePressEvent = mousePressEvent
-            button.mouseReleaseEvent = mouseReleaseEvent
+            # Utilizar la clase AnimatedWidget para efectos uniformes
+            AnimatedWidget.add_click_effect(button)
+            AnimatedWidget.add_hover_effect(button)
 
     def create_button(self, text, icon_name, slot, object_name, enabled=True):
         button = QPushButton(text)
@@ -613,6 +596,17 @@ class YouTubeDownloader(QWidget):
     def update_progress(self, percentage: float):
         self.progress_bar.setValue(int(percentage))
         self.status_label.setText(f"Descargando: {int(percentage)}%")
+        
+        # Añadir efectos visuales cuando se alcanzan ciertos porcentajes
+        if percentage >= 25 and percentage < 26:
+            self.progress_bar.pulse_animation(duration=500)
+        elif percentage >= 50 and percentage < 51:
+            self.progress_bar.pulse_animation(duration=500)
+        elif percentage >= 75 and percentage < 76:
+            self.progress_bar.pulse_animation(duration=500)
+        elif percentage >= 99:
+            self.progress_bar.glow_effect(QColor(0, 255, 0, 100), intensity=15)
+            
         if percentage > 0:
             estimated_time = self.calculate_estimated_time(percentage)
             if estimated_time:
@@ -647,7 +641,11 @@ class YouTubeDownloader(QWidget):
         self.cancel_button.setEnabled(False)
         self.open_last_download_button.setEnabled(True)
         self.progress_bar.reset()
-        self.progress_bar.setValue(0)
+        self.progress_bar.setValue(100)
+        # Añadir animación de celebración al completar
+        self.progress_bar.glow_effect(QColor(0, 255, 0, 100), intensity=25)
+        QTimer.singleShot(1000, lambda: self.progress_bar.setValue(0))
+        
         self.last_download_path = Utils.sanitize_filepath(file_path)
         logger.info(f"Descarga completada: {os.path.basename(file_path)}")
         self.show_success_message(f"Descarga completada con éxito.\nArchivo: {os.path.basename(file_path)}")
@@ -664,21 +662,20 @@ class YouTubeDownloader(QWidget):
         self.show_error_message("Ocurrió un error durante la descarga. Por favor, inténtelo de nuevo.")
 
     def check_for_updates(self):
-        """Verifica si hay actualizaciones disponibles."""
+        """Verifica si hay actualizaciones disponibles utilizando el nuevo sistema."""
         self.update_button.setEnabled(False)
         self.update_button.setText("Buscando...")
         QApplication.processEvents()
-        available, info = Updater.is_new_version_available()
-        if available:
-            reply = QMessageBox.question(
-                self,
-                "Actualización disponible",
-                f"Hay una nueva versión disponible.\n¿Desea descargar e instalar la actualización?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            if reply == QMessageBox.StandardButton.Yes:
-                Updater.download_and_apply_update(info, parent_widget=self)
-        else:
-            QMessageBox.information(self, "Actualización", "No hay actualizaciones disponibles.")
+        
+        # Crear instancia del actualizador
+        updater = Updater()
+        
+        # Obtener la versión actual
+        current_version = updater.get_current_version()
+        
+        # Iniciar proceso de actualización
+        updater.download_and_apply_update(parent_widget=self)
+        
+        # Restaurar estado del botón
         self.update_button.setEnabled(True)
         self.update_button.setText("Buscar actualizaciones")

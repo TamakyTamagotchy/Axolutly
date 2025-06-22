@@ -5,6 +5,9 @@ import browser_cookie3
 import hashlib
 from config.logger import logger
 from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 from src.services.utils import Utils
 from config.settings import Settings
 from src.services.security import Security
@@ -14,6 +17,7 @@ from src.services.anti_tampering import AntiTampering
 from config.logger import Config
 # Definir la versión de la aplicación
 version = "v "+Config.VERSION
+
 class GestorCookies:
     def __init__(self, parent=None):   
         self._auth_completed = False
@@ -36,6 +40,8 @@ class GestorCookies:
         self._cookie_encryptor.encrypt_file.restype = ctypes.c_bool
         self._cookie_encryptor.decrypt_file.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
         self._cookie_encryptor.decrypt_file.restype = ctypes.c_bool
+        # Tiempo máximo para esperar login (segundos)
+        self.login_timeout = 300
 
     def _setup_cookie_cleanup(self):
         """Configura la limpieza automática de cookies antiguas"""
@@ -66,13 +72,14 @@ class GestorCookies:
         return cookie_path if os.path.exists(cookie_path) else None
 
     def update_cookies(self):
-        """Actualiza las cookies usando Selenium solo si es necesario. Intenta con varios navegadores si hay error."""
+        """Actualiza las cookies usando Selenium con detección automática de inicio de sesión."""
         logger.info("Iniciando actualización de cookies...")
         cookie_dir = os.path.join(os.path.dirname(__file__), "cookies")
         os.makedirs(cookie_dir, exist_ok=True)
-        # El archivo .txt solo será temporal e invisible
+        
         last_error = None
         browser_preference = self.settings.get('browser_preference', ["brave", "chrome", "firefox", "opera", "edge"])
+        
         # Buscar rutas de todos los navegadores instalados
         browser_paths = {}
         browser_registry = {
@@ -82,6 +89,16 @@ class GestorCookies:
             'brave': r'Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\brave.exe',
             'opera': r'Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\launcher.exe'
         }
+        
+        # Obtener navegador predeterminado del usuario primero
+        default_browser = self._get_preferred_browser_path()
+        if default_browser:
+            # Mover el navegador predeterminado al principio de la lista
+            browser_name = default_browser[0]
+            if browser_name in browser_preference:
+                browser_preference.remove(browser_name)
+                browser_preference.insert(0, browser_name)
+        
         import winreg
         for browser, reg_path in browser_registry.items():
             try:
@@ -91,24 +108,28 @@ class GestorCookies:
                         browser_paths[browser] = path
             except Exception:
                 continue
+        
         for browser_try in browser_preference:
             if browser_try not in browser_paths:
                 continue
+                
             # Mostrar mensaje ANTES de intentar con el navegador
             if self.parent and hasattr(self.parent, "show_error_message"):
                 self.parent.show_error_message(f"Probando autenticación con: {browser_try.capitalize()}...")
+                
             try:
                 logger.info(f"Intentando autenticación con navegador: {browser_try}")
                 browser_name = browser_try
                 browser_path = browser_paths[browser_try]
-                # Prioridad: Chrome/Brave/Firefox/Opera, Edge solo si no hay otro
+                
+                # Configurar opciones del navegador según su tipo
                 if browser_name in ["chrome", "brave"]:
                     from selenium.webdriver.chrome.options import Options
                     from selenium.webdriver.chrome.service import Service as ChromeService
                     from webdriver_manager.chrome import ChromeDriverManager
                     options = Options()
                     options.add_argument("--enable-unsafe-swiftshader")
-                    options.add_argument("--window-size=360,720")
+                    options.add_argument("--window-size=800,600")  # Ventana más grande para mejor UX
                     options.add_argument("--disable-gpu")
                     options.add_argument("--no-sandbox")
                     options.add_argument("--disable-dev-shm-usage")
@@ -134,7 +155,7 @@ class GestorCookies:
                     options.add_argument("--enable-unsafe-swiftshader")
                     options.add_argument("--disable-gpu")
                     options.add_argument("--no-sandbox")
-                    options.add_argument("--window-size=360,720")
+                    options.add_argument("--window-size=800,600")  # Ventana más grande para mejor UX
                     options.add_argument("--disable-dev-shm-usage")
                     options.add_argument("--disable-extensions")
                     options.add_argument(f"--user-agent=Axolutly {version}")
@@ -150,7 +171,7 @@ class GestorCookies:
                     edge_options.add_argument("--no-sandbox")
                     edge_options.add_argument("--disable-extensions")
                     edge_options.add_argument("--disable-dev-shm-usage")
-                    edge_options.add_argument("--window-size=360,720")
+                    edge_options.add_argument("--window-size=800,600")  # Ventana más grande para mejor UX
                     edge_options.add_argument("--ignore-certificate-errors")
                     edge_options.add_argument("--disable-features=IsolateOrigins,site-per-process")
                     edge_options.add_argument("--disable-blink-features=AutomationControlled")
@@ -166,28 +187,40 @@ class GestorCookies:
                 else:
                     raise Exception("Navegador no soportado para autenticación")
                 
+                # Abrir la página de inicio de sesión de YouTube directamente
                 self._driver.get("https://accounts.google.com/signin/v2/identifier?service=youtube")
+                
+                # Notificar al usuario que debe iniciar sesión 
                 if self.parent and hasattr(self.parent, "showAuthDialog"):
                     self.parent.showAuthDialog.emit()
+                    
                 # Al abrir el navegador exitosamente, borra el mensaje de error
                 if self.parent and hasattr(self.parent, "clear_error_message"):
                     self.parent.clear_error_message()
-                timeout = 300
-                start_time = time.time()
-                while not self._auth_completed and time.time() - start_time < timeout:
-                    time.sleep(0.1)
-                    # Verificar explícitamente si la autenticación fue cancelada
-                    if self.parent and hasattr(self.parent, "_cancelled") and self.parent._cancelled:
-                        logger.warning("Autenticación cancelada por el usuario desde el hilo principal.")
-                        raise Exception("Autenticación cancelada por el usuario")
-
-                if not self._auth_completed:
+                
+                # Detectar automáticamente cuando el usuario ha iniciado sesión
+                login_detected = self._wait_for_successful_login()
+                
+                if not login_detected:
+                    # Usar el método tradicional de esperar al usuario
+                    timeout = self.login_timeout
+                    start_time = time.time()
+                    while not self._auth_completed and time.time() - start_time < timeout:
+                        time.sleep(0.1)
+                        # Verificar explícitamente si la autenticación fue cancelada
+                        if self.parent and hasattr(self.parent, "_cancelled") and self.parent._cancelled:
+                            logger.warning("Autenticación cancelada por el usuario desde el hilo principal.")
+                            raise Exception("Autenticación cancelada por el usuario")
+                
+                # Si no se completó la autenticación por ningún método, lanzar excepción
+                if not self._auth_completed and not login_detected:
                     raise Exception("Timeout en autenticación")
-
+                
+                # Asegurarse de que estamos en youtube.com para obtener las cookies correctas
                 if "youtube.com" not in self._driver.current_url:
                     self._driver.get("https://www.youtube.com")
                     time.sleep(2)
-
+                
                 # Guardar cookies en archivo temporal invisible
                 with tempfile.NamedTemporaryFile(delete=False, mode='w', encoding='utf-8', suffix='.txt') as tmp:
                     tmp.write("# Netscape HTTP Cookie File\n")
@@ -202,25 +235,38 @@ class GestorCookies:
                             value = cookie.get("value", "")
                             tmp.write(f"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}\n")
                     tmp_path = tmp.name
+                
                 # Cifrar archivo temporal a .dll (invisible para el usuario)
                 encrypted_path = os.path.join(cookie_dir, "ck.dll")
                 ok = self._cookie_encryptor.encrypt_file(tmp_path.encode('utf-8'), encrypted_path.encode('utf-8'))
                 os.remove(tmp_path)
+                
                 if not ok:
                     logger.error("Error cifrando archivo de cookies con DLL.")
                     raise Exception("Error cifrando archivo de cookies con DLL.")
+                
+                # Establecer permisos restrictivos
                 try:
                     os.chmod(encrypted_path, 0o600)
                 except Exception as e:
                     logger.warning(f"No se pudieron establecer permisos restrictivos al archivo de cookies: {e}")
+                    
                 logger.info(f"Archivo de cookies cifrado creado: {encrypted_path}")
+                
+                # Cerrar el navegador
                 if self._driver:
                     try:
                         self._driver.quit()
                     except:
                         pass
                     self._driver = None
+                    
+                # Informar que el proceso fue exitoso
+                if self.parent and hasattr(self.parent, "set_auth_completed"):
+                    self.parent.set_auth_completed()
+                
                 return encrypted_path
+                
             except Exception as e:
                 logger.error(f"Error con navegador {browser_try}: {e}")
                 # Mostrar advertencia de error y que se intentará con otro navegador
@@ -234,6 +280,7 @@ class GestorCookies:
                     self._driver = None
                 last_error = e
                 continue
+                
         # Si todos los navegadores fallan
         logger.error(f"Todos los navegadores fallaron para la autenticación de cookies: {last_error}")
         if self.parent and hasattr(self.parent, "show_error_message"):
@@ -242,6 +289,77 @@ class GestorCookies:
             raise last_error
         else:
             raise RuntimeError("No se pudo autenticar con ningún navegador.")
+
+    def _wait_for_successful_login(self):
+        """
+        Detecta automáticamente cuando el usuario ha iniciado sesión correctamente en YouTube.
+        
+        Returns:
+            bool: True si se detectó el inicio de sesión, False si no
+        """
+        try:
+            # Esperar hasta 5 minutos para el inicio de sesión
+            max_wait_time = self.login_timeout
+            start_time = time.time()
+            
+            while time.time() - start_time < max_wait_time:
+                if self.parent and hasattr(self.parent, "_cancelled") and self.parent._cancelled:
+                    logger.warning("Detección de login cancelada por el usuario")
+                    return False
+                
+                try:
+                    # Verificar si estamos en YouTube y hay un avatar de perfil visible
+                    # (señal de inicio de sesión exitoso)
+                    current_url = self._driver.current_url
+                    
+                    if "youtube.com" in current_url:
+                        # Buscar elementos que indican sesión iniciada en YouTube
+                        try:
+                            # Esperar brevemente por el avatar de usuario (indica sesión iniciada)
+                            avatar = WebDriverWait(self._driver, 2).until(
+                                EC.presence_of_element_located((By.CSS_SELECTOR, "img#avatar, #avatar-btn, button#avatar-btn"))
+                            )
+                            
+                            # Si encontramos el avatar, el usuario ha iniciado sesión
+                            logger.info("Inicio de sesión detectado automáticamente (avatar encontrado)")
+                            self._auth_completed = True
+                            
+                            # Si hay un mensaje de diálogo de autenticación abierto, cerrarlo
+                            if self.parent and hasattr(self.parent, "set_auth_completed"):
+                                self.parent.set_auth_completed()
+                                
+                            return True
+                        except Exception:
+                            # El elemento avatar no se encontró, seguir esperando
+                            pass
+                    
+                    # Verificar si hay cookies específicas de autenticación de Google
+                    cookies = self._driver.get_cookies()
+                    has_auth_cookies = any(c.get('name') == 'APISID' for c in cookies)
+                    has_youtube_cookies = any(c.get('name') == 'LOGIN_INFO' for c in cookies)
+                    
+                    if has_auth_cookies and has_youtube_cookies:
+                        logger.info("Inicio de sesión detectado automáticamente (cookies de autenticación encontradas)")
+                        self._auth_completed = True
+                        # Si hay un mensaje de diálogo de autenticación abierto, cerrarlo
+                        if self.parent and hasattr(self.parent, "set_auth_completed"):
+                            self.parent.set_auth_completed()
+                        return True
+                        
+                except Exception as e:
+                    # Error al verificar el estado de inicio de sesión, continuar intentando
+                    logger.debug(f"Error al verificar estado de inicio de sesión: {e}")
+                
+                # Esperar un poco antes de la siguiente verificación
+                time.sleep(1)
+            
+            # Si llegamos aquí, se agotó el tiempo de espera
+            logger.warning("Tiempo de espera agotado para detección automática de inicio de sesión")
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error en detección automática de inicio de sesión: {e}")
+            return False
 
     def _get_preferred_browser_path(self):
         """Obtiene la ruta y nombre del navegador predeterminado del usuario usando el registro de Windows"""
