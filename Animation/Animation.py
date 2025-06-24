@@ -318,7 +318,7 @@ class AnimatedWidget:
     
     @staticmethod
     def add_drop_shadow(widget: QWidget, color: QColor = None, blur_radius: int = 10, 
-                         offset: tuple = (0, 2)) -> QGraphicsDropShadowEffect:
+                        offset: tuple = (0, 2)) -> QGraphicsDropShadowEffect:
         """Agrega un efecto de sombra a cualquier widget"""
         if color is None:
             color = QColor(0, 0, 0, 50)
@@ -354,7 +354,7 @@ class AnimatedWidget:
             anim.setDuration(duration)
             anim.setStartValue(rect)
             anim.setEndValue(rect.adjusted(-width_diff//2, -height_diff//2, 
-                                         width_diff//2, height_diff//2))
+                                        width_diff//2, height_diff//2))
             anim.setEasingCurve(QEasingCurve.Type.OutQuad)
             anim.start()
             w._hover_anim = anim  # Mantener referencia
@@ -431,3 +431,5 @@ class AnimatedWidget:
         widget.mouseReleaseEvent = mouseReleaseEvent
         
         return widget
+    
+    

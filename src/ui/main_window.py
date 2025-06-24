@@ -78,6 +78,9 @@ class YouTubeDownloader(QWidget):
 
         # Crear barra de menú
         self.menu_bar = QMenuBar(self)
+        self.menu_bar.setObjectName("menu_bar")
+        main_layout.setMenuBar(self.menu_bar)
+        # Crear la barra de menú con opciones adicionales
         self.create_menu_bar()
 
         self.setup_ui_components()
@@ -97,6 +100,7 @@ class YouTubeDownloader(QWidget):
         # Opción para actualizar yt-dlp
         update_yt_dlp_action = QAction("Actualizar yt-dlp", self)
         update_yt_dlp_action.triggered.connect(lambda: Updater.update_yt_dlp(self))
+        update_yt_dlp_action.setObjectName("update_yt_dlp_action")
         file_menu.addAction(update_yt_dlp_action)
 
         # Opción para salir
@@ -118,8 +122,8 @@ class YouTubeDownloader(QWidget):
             self.title_label = self.create_title_label()
             self.url_input = self.create_url_input()
             self.options_layout = self.create_options_layout()
-            
-            self.download_button = self.create_button("Descargar", Config.ICON_DOWNLOAD, self.start_download, "download_button")
+
+            self.download_button = self.create_button("Descargar", Config.ICON_DOWNLOAD, self.start_download, "download_button", enabled=True)
             self.cancel_button = self.create_button("Cancelar", Config.ICON_CANCEL, self.cancel_download, "cancel_button", enabled=False)
             self.open_last_download_button = self.create_button("Abrir última descarga", Config.ICON_FOLDER, self.open_last_download, "open_last_download_button", enabled=False)
             
@@ -130,8 +134,7 @@ class YouTubeDownloader(QWidget):
             # Agregar sombra a los botones principales
             self.add_shadow_effect(self.download_button)
             self.add_shadow_effect(self.cancel_button)
-            self.add_shadow_effect(self.open_last_download_button)
-
+            self.add_shadow_effect(self.open_last_download_button)            
             buttons_layout = QHBoxLayout()
             buttons_layout.addWidget(self.download_button)
             buttons_layout.addWidget(self.cancel_button)
@@ -140,26 +143,53 @@ class YouTubeDownloader(QWidget):
             if main_layout is not None:
                 main_layout.addWidget(self.title_label)
                 main_layout.addWidget(self.url_input)
+                
                 options_widget = QWidget()
                 options_widget.setLayout(self.options_layout)
                 main_layout.addWidget(options_widget)
+                
                 buttons_widget = QWidget()
                 buttons_widget.setLayout(buttons_layout)
                 main_layout.addWidget(buttons_widget)
                 main_layout.addWidget(self.open_last_download_button)
+                
                 self.progress_bar = self.create_progress_bar()
                 self.status_label = self.create_status_label()
                 main_layout.addWidget(self.progress_bar)
                 main_layout.addWidget(self.status_label)
+                
+                # Botón de actualización con texto superpuesto - movido más arriba para reducir espacio                
+                update_layout = QHBoxLayout()  # Layout horizontal para centrar
+                update_layout.addStretch()     # Espaciador izquierdo
+                
+                # Widget contenedor para superponer botón y texto
+                update_container = QWidget()
+                update_container.setFixedSize(200, 50)  # Tamaño fijo para el contenedor
+                
+                # Crear botón base
+                self.update_button = QPushButton("", update_container)
+                self.update_button.setObjectName("update_button")
+                self.update_button.setCursor(Qt.CursorShape.PointingHandCursor)
+                self.update_button.setToolTip("Buscar actualizaciones de Axolutly")
+                self.update_button.clicked.connect(self.check_for_updates)
+                self.update_button.setGeometry(0, 0, 200, 50)  # Ocupar todo el contenedor
+                
+                # Crear label de texto superpuesto
+                self.update_label = QLabel("Buscar actualizaciones", update_container)
+                self.update_label.setObjectName("update_label")
+                self.update_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.update_label.setGeometry(0, 0, 200, 50)  # Misma posición que el botón
+                self.update_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)  # Permitir clics pasen al botón
+                
+                update_layout.addWidget(update_container)
+                update_layout.addStretch()     # Espaciador derecho
+                
+                update_widget = QWidget()
+                update_widget.setLayout(update_layout)
+                main_layout.addWidget(update_widget)
+                
                 self.version_label = self.create_version_label()
                 main_layout.addWidget(self.version_label)
-                
-                # Botón de actualización
-                self.update_button = QPushButton("Buscar actualizaciones")
-                self.update_button.setObjectName("update_button")
-                self.update_button.clicked.connect(self.check_for_updates)
-                if main_layout is not None:
-                    main_layout.addWidget(self.update_button)
 
     def add_shadow_effect(self, button):
         """Agrega un efecto de sombra (box-shadow) a un botón usando QGraphicsDropShadowEffect."""
@@ -212,6 +242,7 @@ class YouTubeDownloader(QWidget):
         self.quality_combo = QComboBox()
         self.quality_combo.addItems(["2160p (4K)", "1440p (2K)", "1080p (FHD)", "720p (HD)", 
                                     "480p", "360p", "240p", "144p"])
+        self.quality_combo.setCursor(Qt.CursorShape.PointingHandCursor)
         # Corregir la forma de obtener la calidad predeterminada
         default_quality = self.settings.get('default_quality', "1080p")
         default_quality_text = next((q for q in ["2160p (4K)", "1440p (2K)", "1080p (FHD)", "720p (HD)", 
@@ -222,11 +253,19 @@ class YouTubeDownloader(QWidget):
         self.quality_combo.setToolTip("Seleccione la calidad del video")
         self.quality_combo.currentTextChanged.connect(self.save_quality_preference)
         media_options.addWidget(self.quality_combo)
-        self.audio_only_checkbox = QCheckBox("Solo audio")
+        # --- Cambios aquí: separar checkbox y label ---
+        audio_only_layout = QHBoxLayout()
+        self.audio_only_checkbox = QCheckBox("")  # Sin texto
+        self.audio_only_checkbox.setObjectName("audio_only_checkbox")
+        self.audio_only_checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
         self.audio_only_checkbox.setChecked(self.settings.get('audio_only', False))
         self.audio_only_checkbox.setToolTip("Descargar solo el audio en formato MP3")
         self.audio_only_checkbox.stateChanged.connect(self.toggle_quality_selector)
-        media_options.addWidget(self.audio_only_checkbox)
+        self.audio_only_label = QLabel("Solo audio")
+        self.audio_only_label.setObjectName("audio_only_label")
+        audio_only_layout.addWidget(self.audio_only_checkbox)
+        audio_only_layout.addWidget(self.audio_only_label)
+        media_options.addLayout(audio_only_layout)
         # Estado inicial del combo de calidad según el checkbox
         self.quality_combo.setEnabled(not self.audio_only_checkbox.isChecked())
         # Botón de cambio de tema mejorado
@@ -249,6 +288,10 @@ class YouTubeDownloader(QWidget):
     def toggle_theme(self):
         self.dark_mode = not self.dark_mode
         self.theme_button.setText("☀️" if self.dark_mode else "🌙")
+        # Cambiar icono según el tema
+        # Actualizar icono del botón de tema con el nombre
+        #self.theme_button.setIcon(QIcon(os.path.join(self.icon_dir, Config.ICON_THEME_DARK if self.dark_mode else Config.ICON_THEME_LIGHT)))
+        #self.theme_button.setIconSize(QSize(24, 24))
         self.theme_button.setToolTip("Cambiar a tema claro" if self.dark_mode else "Cambiar a tema oscuro")
         self.settings.set('theme', 'dark' if self.dark_mode else 'light')
         self.apply_styles()
@@ -258,6 +301,7 @@ class YouTubeDownloader(QWidget):
         animation_group = QSequentialAnimationGroup()
         move_animation = QPropertyAnimation(button, b"geometry")
         move_animation.setDuration(150)
+        # Ajustar la geometría del botón para la animación
         move_animation.setStartValue(button.geometry())
         move_animation.setEndValue(button.geometry().adjusted(0, 0, 0, 5))
         move_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
@@ -276,13 +320,13 @@ class YouTubeDownloader(QWidget):
 
     def create_progress_bar(self):
         progress_bar = AnimatedProgressBar()
+        progress_bar.setObjectName("progress_bar")
         return progress_bar
 
     def create_status_label(self):
         status_label = QLabel("")
         status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         return status_label
-    
     def create_version_label(self):
         version_label = QLabel(f"{version}")
         version_label.setAlignment(Qt.AlignmentFlag.AlignRight)
@@ -337,7 +381,7 @@ class YouTubeDownloader(QWidget):
                     logger.error(f"No se pudo eliminar el archivo temporal tras varios intentos (posiblemente sigue en uso): {full_path}")
 
     def apply_styles(self):
-        # Cargar el archivo CSS externo y aplicar el tema correspondiente
+        # Cargar el archivo CSS limpio para el botón de actualización
         css_path = os.path.join(os.path.dirname(__file__), "axolutly_styles.css")
         theme = 'dark' if self.dark_mode else 'light'
         css = ""
@@ -347,6 +391,9 @@ class YouTubeDownloader(QWidget):
             # Reemplazar los selectores para el tema activo
             css = css.replace('[theme="dark"]', '' if self.dark_mode else '[theme="dark"]')
             css = css.replace('[theme="light"]', '' if not self.dark_mode else '[theme="light"]')
+        
+        # Establecer el atributo theme en el widget principal
+        self.setProperty('theme', theme)
         self.setStyleSheet(css)
         logger.debug(f"Estilo {'oscuro' if self.dark_mode else 'claro'} aplicado")
 
@@ -354,8 +401,6 @@ class YouTubeDownloader(QWidget):
         """
         Sistema de animaciones mejorado para botones usando PyQt6
         """
-        from PyQt6.QtWidgets import QGraphicsOpacityEffect
-        from PyQt6.QtCore import QPropertyAnimation, QEasingCurve
 
         def add_opacity_animation(button):
             effect = QGraphicsOpacityEffect(button)
@@ -502,7 +547,7 @@ class YouTubeDownloader(QWidget):
             return
         # Validación general
         if not Utils.validate_supported_url(url):
-            self.show_error_message("Por favor, ingresa una URL válida de YouTube o Twitch (VOD o clip).")
+            self.show_error_message("Por favor, ingresa una URL válida de YouTube, Twitch o Tiktok.")
             return
 
         last_dir = self.settings.get('download_dir', '')
@@ -566,7 +611,7 @@ class YouTubeDownloader(QWidget):
         reply = QMessageBox.question(
                     self,
                     "Confirmar Sobrescritura",
-                    f"El archivo '{file_name}' ya existe. ¿Desea sobrescribirlo?",
+                    f"El archivo '{file_name}' ya existe. ¿Desea Reemplazarlo?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
                 )
         if not self.download_thread or not hasattr(self.download_thread, 'set_overwrite_answer'):
@@ -649,6 +694,7 @@ class YouTubeDownloader(QWidget):
         self.last_download_path = Utils.sanitize_filepath(file_path)
         logger.info(f"Descarga completada: {os.path.basename(file_path)}")
         self.show_success_message(f"Descarga completada con éxito.\nArchivo: {os.path.basename(file_path)}")
+        
 
     def download_error(self, error_message):
         # Evitar mostrar error si es cancelación
@@ -664,7 +710,7 @@ class YouTubeDownloader(QWidget):
     def check_for_updates(self):
         """Verifica si hay actualizaciones disponibles utilizando el nuevo sistema."""
         self.update_button.setEnabled(False)
-        self.update_button.setText("Buscando...")
+        self.update_label.setText("Buscando...")  # Cambiar el texto del label
         QApplication.processEvents()
         
         # Crear instancia del actualizador
@@ -672,10 +718,15 @@ class YouTubeDownloader(QWidget):
         
         # Obtener la versión actual
         current_version = updater.get_current_version()
+        if not current_version:
+            self.show_error_message("No se pudo obtener la versión actual.")
+            self.update_button.setEnabled(True)
+            self.update_label.setText("Buscar actualizaciones")  # Restaurar texto del label
+            return
         
         # Iniciar proceso de actualización
         updater.download_and_apply_update(parent_widget=self)
         
-        # Restaurar estado del botón
+        # Restaurar estado del botón y label
         self.update_button.setEnabled(True)
-        self.update_button.setText("Buscar actualizaciones")
+        self.update_label.setText("Buscar actualizaciones")  # Restaurar texto del label
