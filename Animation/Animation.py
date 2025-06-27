@@ -245,19 +245,24 @@ class AnimatedWidget:
     """
     
     @staticmethod
-    def fade_in(widget: QWidget, duration: int = 300) -> QPropertyAnimation:
-        """Animación de aparición gradual"""
-        effect = QGraphicsOpacityEffect()
-        widget.setGraphicsEffect(effect)
-        
-        animation = QPropertyAnimation(effect, b"opacity")
-        animation.setDuration(duration)
-        animation.setStartValue(0.0)
-        animation.setEndValue(1.0)
-        animation.setEasingCurve(AnimationType.EASE_OUT.value)
-        animation.start()
-        
-        return animation
+    def fade_in(widget: QWidget, duration: int = 300, delay: int = 0) -> QPropertyAnimation:
+        """Animación de aparición gradual con soporte opcional de delay (ms)"""
+        def start_animation():
+            effect = QGraphicsOpacityEffect()
+            widget.setGraphicsEffect(effect)
+            animation = QPropertyAnimation(effect, b"opacity")
+            animation.setDuration(duration)
+            animation.setStartValue(0.0)
+            animation.setEndValue(1.0)
+            animation.setEasingCurve(AnimationType.EASE_OUT.value)
+            animation.start()
+            widget._fade_in_animation = animation  # Mantener referencia
+            return animation
+        if delay > 0:
+            QTimer.singleShot(delay, start_animation)
+            return None  # No se puede devolver la animación directamente si hay delay
+        else:
+            return start_animation()
     
     @staticmethod
     def fade_out(widget: QWidget, duration: int = 300) -> QPropertyAnimation:
@@ -431,5 +436,4 @@ class AnimatedWidget:
         widget.mouseReleaseEvent = mouseReleaseEvent
         
         return widget
-    
-    
+

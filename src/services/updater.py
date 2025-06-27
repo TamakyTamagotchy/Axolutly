@@ -1,3 +1,4 @@
+import tarfile
 import requests
 import os
 import zipfile
@@ -7,8 +8,10 @@ import threading
 import tempfile
 import hashlib
 import json
-from datetime import datetime
-from PyQt6.QtWidgets import QMessageBox, QApplication, QProgressDialog, QProgressBar
+import importlib.util
+import subprocess
+from datetime import datetime, timedelta
+from PyQt6.QtWidgets import QMessageBox, QApplication, QProgressDialog
 from PyQt6.QtCore import QObject, pyqtSignal
 from config.logger import logger, Config
 from packaging import version as semver
@@ -27,199 +30,206 @@ class UpdateProgress(QObject):
 
 
 class YtDlpUpdateThread(threading.Thread):
-    """Thread para actualizar la librería yt-dlp"""
-    def __init__(self, parent_widget=None, progress_callback=None):
+    """Thread para actualizar la librería yt-dlp en entorno embebido/carpeta"""
+    def __init__(self, parent_widget=None, progress_callback=None, yt_dlp_lib_path=None):
         super().__init__()
         self.parent_widget = parent_widget
         self.progress_callback = progress_callback
-        
-        # Determinar ruta raíz de la aplicación
-        if getattr(sys, 'frozen', False):
-            self.app_root = os.path.dirname(sys.executable)
-        else:
-            self.app_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+        # Ruta a la carpeta donde está la carpeta yt_dlp (ej: .../build/Axolutly 1.2.0/lib)
+        self.yt_dlp_lib_path = yt_dlp_lib_path or self.detect_lib_path()
+
+    def detect_lib_path(self):
+        # Intenta detectar la ruta de la carpeta lib donde está yt_dlp
+        # Busca hacia arriba desde el script actual
+        base = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+        for root, dirs, files in os.walk(base):
+            if 'yt_dlp' in dirs:
+                return os.path.join(root)
+        return base
 
     def run(self):
         try:
             if self.progress_callback:
                 self.progress_callback.status.emit("Consultando versión actual de yt-dlp...")
                 self.progress_callback.progress.emit(10)
-            
-            # Obtener información de la versión actual
+
             current_version = self.get_current_version()
-            
+
             if self.progress_callback:
                 self.progress_callback.status.emit(f"Versión actual: {current_version}")
                 self.progress_callback.progress.emit(20)
                 self.progress_callback.status.emit("Buscando actualizaciones disponibles...")
-            
+
             # Consultar la última versión disponible
             api_url = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
             response = requests.get(api_url, timeout=15)
             response.raise_for_status()
             release = response.json()
             latest_version = release.get("tag_name", "").strip()
-            
-            # Verificar si hay una actualización disponible
+
             if not latest_version:
                 error_msg = "No se pudo determinar la última versión disponible."
                 logger.error(error_msg)
                 if self.progress_callback:
                     self.progress_callback.error.emit(error_msg)
                 return
-            
+
             if self.progress_callback:
                 self.progress_callback.status.emit(f"Última versión disponible: {latest_version}")
                 self.progress_callback.progress.emit(30)
-            
-            # Realizar la actualización mediante pip
-            if self.progress_callback:
-                self.progress_callback.status.emit(f"Actualizando yt-dlp a {latest_version}...")
-                self.progress_callback.progress.emit(40)
-            
-            # Ejecutar pip para actualizar el paquete
-            success, output = self.update_with_pip()
-            
-            if not success:
-                error_msg = f"Error actualizando yt-dlp: {output}"
+
+            # Buscar asset .tar.gz fuente
+            assets = release.get('assets', [])
+            tar_asset = next((a for a in assets if a['name'].endswith('.tar.gz')), None)
+            if not tar_asset:
+                error_msg = "No se encontró el archivo fuente .tar.gz de yt-dlp en la release."
                 logger.error(error_msg)
                 if self.progress_callback:
                     self.progress_callback.error.emit(error_msg)
                 return
-            
-            # Verificar la nueva versión instalada
-            new_version = self.get_current_version()
-            
+            download_url = tar_asset['browser_download_url']
+            file_size = tar_asset.get('size', 0)
+
+            # Descargar el tar.gz
+            tmp_dir = tempfile.mkdtemp()
+            tar_path = os.path.join(tmp_dir, tar_asset['name'])
+            if self.progress_callback:
+                self.progress_callback.status.emit(f"Descargando yt-dlp {latest_version}...")
+            downloaded = 0
+            with requests.get(download_url, stream=True, timeout=30) as r:
+                r.raise_for_status()
+                with open(tar_path, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if self.progress_callback and file_size > 0:
+                            progress = 30 + int((downloaded / file_size) * 30)
+                            self.progress_callback.progress.emit(progress)
+
+            # Extraer solo la carpeta yt_dlp del tar.gz
+            if self.progress_callback:
+                self.progress_callback.status.emit("Extrayendo nueva versión de yt-dlp...")
+                self.progress_callback.progress.emit(70)
+            with tarfile.open(tar_path, 'r:gz') as tar:
+                yt_dlp_folder = None
+                for member in tar.getmembers():
+                    if member.isdir() and member.name.endswith('/yt_dlp'):
+                        yt_dlp_folder = member.name
+                        break
+                if not yt_dlp_folder:
+                    # Buscar el path correcto (puede ser yt-dlp-<version>/yt_dlp)
+                    for member in tar.getmembers():
+                        if member.isdir() and member.name.split('/')[-1] == 'yt_dlp':
+                            yt_dlp_folder = member.name
+                            break
+                if not yt_dlp_folder:
+                    raise Exception("No se encontró la carpeta yt_dlp en el tar.gz descargado.")
+                extract_path = os.path.join(tmp_dir, 'yt_dlp_new')
+                tar.extractall(path=extract_path, members=[m for m in tar.getmembers() if m.name.startswith(yt_dlp_folder)])
+                new_yt_dlp_path = os.path.join(extract_path, yt_dlp_folder)
+
+            # Reemplazar la carpeta yt_dlp en el entorno embebido
+            target_yt_dlp = os.path.join(self.yt_dlp_lib_path, 'yt_dlp')
+            if os.path.exists(target_yt_dlp):
+                shutil.rmtree(target_yt_dlp)
+            shutil.copytree(new_yt_dlp_path, target_yt_dlp)
+
             if self.progress_callback:
                 self.progress_callback.progress.emit(100)
-                success_msg = f"yt-dlp actualizado de {current_version} a {new_version}"
-                self.progress_callback.finished.emit(True, success_msg)
-                
-            logger.info(f"yt-dlp actualizado a {new_version}.")
-            
-            # Mensaje solo si no hay callback
-            if not self.progress_callback and self.parent_widget:
-                QMessageBox.information(
-                    self.parent_widget, 
-                    "Actualización", 
-                    f"yt-dlp actualizado de {current_version} a {new_version}. Reinicie la aplicación."
-                )
-                
+                self.progress_callback.finished.emit(True, f"yt-dlp actualizado a {latest_version}. Reinicie la aplicación.")
+            logger.info(f"yt-dlp actualizado a {latest_version} en {target_yt_dlp}")
+
         except Exception as e:
             error_msg = f"Error actualizando yt-dlp: {e}"
             logger.error(error_msg)
-            
             if self.progress_callback:
                 self.progress_callback.error.emit(error_msg)
             elif self.parent_widget:
                 QMessageBox.critical(self.parent_widget, "Error", error_msg)
-    
-    def get_current_version(self):
-        """Obtiene la versión actual de yt-dlp instalada"""
-        try:
-            # Intentar importar yt_dlp para obtener la versión
+        finally:
             try:
-                import yt_dlp
-                return getattr(yt_dlp, "__version__", "desconocida")
-            except ImportError:
-                # Si no se puede importar, intentar con subprocess
-                import subprocess
-                result = subprocess.run(
-                    [sys.executable, "-m", "pip", "show", "yt-dlp"],
-                    capture_output=True,
-                    text=True
-                )
-                for line in result.stdout.splitlines():
-                    if line.startswith("Version:"):
-                        return line.split(":", 1)[1].strip()
-                return "desconocida"
+                if 'tar_path' in locals() and os.path.exists(tar_path):
+                    os.remove(tar_path)
+                if 'tmp_dir' in locals() and os.path.exists(tmp_dir):
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
+            except Exception as e:
+                logger.warning(f"Error limpiando temporales de actualización yt-dlp: {e}")
+
+    def get_current_version(self):
+        """Obtiene la versión actual de yt-dlp instalada en la carpeta lib"""
+        try:
+            sys.path.insert(0, self.yt_dlp_lib_path)
+            import yt_dlp
+            return getattr(yt_dlp, "__version__", "desconocida")
         except Exception as e:
             logger.error(f"Error obteniendo versión actual de yt-dlp: {e}")
             return "desconocida"
+        finally:
+            if self.yt_dlp_lib_path in sys.path:
+                sys.path.remove(self.yt_dlp_lib_path)
     
-    def find_package_location(self):
-        """Encuentra la ubicación del paquete yt_dlp instalado"""
+class YtDlpPipUpdateThread(threading.Thread):
+    """Thread para actualizar yt-dlp instalado por pip"""
+    def __init__(self, parent_widget=None, progress_callback=None):
+        super().__init__()
+        self.parent_widget = parent_widget
+        self.progress_callback = progress_callback
+
+    def run(self):
         try:
-            # Intentar importar y encontrar la ruta
-            import importlib.util
-            import yt_dlp
-            
-            if hasattr(yt_dlp, "__file__"):
-                package_dir = os.path.dirname(yt_dlp.__file__)
-                logger.info(f"Ubicación del paquete yt_dlp: {package_dir}")
-                return package_dir
-        except Exception as e:
-            logger.error(f"Error localizando paquete yt_dlp: {e}")
-        
-        # Si falla el método anterior, usar pip para encontrar la ubicación
-        try:
-            import subprocess
-            result = subprocess.run(
-                [sys.executable, "-m", "pip", "show", "-f", "yt-dlp"],
-                capture_output=True,
-                text=True
-            )
-            
-            location = None
-            for line in result.stdout.splitlines():
-                if line.startswith("Location:"):
-                    location = line.split(":", 1)[1].strip()
-                    break
-            
-            if location:
-                package_dir = os.path.join(location, "yt_dlp")
-                if os.path.exists(package_dir):
-                    logger.info(f"Ubicación del paquete yt_dlp: {package_dir}")
-                    return package_dir
-        except Exception as e:
-            logger.error(f"Error obteniendo ubicación con pip: {e}")
-        
-        return None
-    
-    def update_with_pip(self):
-        """Actualiza yt-dlp usando pip"""
-        try:
-            import subprocess
-            
-            # Comando para actualizar
-            cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"]
-            
-            # Ejecutar comando
+            if self.progress_callback:
+                self.progress_callback.status.emit("Actualizando yt-dlp vía pip...")
+                self.progress_callback.progress.emit(10)
+            # Ejecutar el comando de actualización
+            cmd = [sys.executable, '-m', 'pip', 'install', '-U', 'yt-dlp']
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
+                stderr=subprocess.STDOUT,
                 universal_newlines=True
             )
-            
-            # Mostrar progreso
-            stdout = []
-            for line in iter(process.stdout.readline, ""):
+            output_lines = []
+            while True:
+                line = process.stdout.readline()
                 if not line:
                     break
-                stdout.append(line.strip())
+                output_lines.append(line)
                 if self.progress_callback:
-                    self.progress_callback.status.emit(f"Actualizando: {line.strip()}")
-                    # Incrementar progreso gradualmente entre 40-90%
-                    current_progress = self.progress_callback.progress.emit(
-                        40 + min(50, len(stdout))
-                    )
-            
-            # Esperar finalización y obtener resultado
+                    self.progress_callback.status.emit(line.strip())
             process.wait()
-            stderr = process.stderr.read()
-            
-            if process.returncode != 0:
-                logger.error(f"Error en pip: {stderr}")
-                return False, stderr
-            
-            return True, "\n".join(stdout)
-            
+            if process.returncode == 0:
+                if self.progress_callback:
+                    self.progress_callback.progress.emit(100)
+                    self.progress_callback.finished.emit(True, "yt-dlp actualizado correctamente vía pip. Reinicie la aplicación.")
+                logger.info("yt-dlp actualizado correctamente vía pip.")
+            else:
+                error_msg = "Error actualizando yt-dlp vía pip.\n" + ''.join(output_lines)
+                logger.error(error_msg)
+                if self.progress_callback:
+                    self.progress_callback.error.emit(error_msg)
+                elif self.parent_widget:
+                    QMessageBox.critical(self.parent_widget, "Error", error_msg)
         except Exception as e:
-            logger.error(f"Error ejecutando pip: {e}")
-            return False, str(e)
-    
+            error_msg = f"Error ejecutando actualización por pip: {e}"
+            logger.error(error_msg)
+            if self.progress_callback:
+                self.progress_callback.error.emit(error_msg)
+            elif self.parent_widget:
+                QMessageBox.critical(self.parent_widget, "Error", error_msg)
+
+    @staticmethod
+    def is_yt_dlp_installed_by_pip():
+        """Detecta si yt-dlp está instalado por pip (en site-packages)"""
+        try:
+            spec = importlib.util.find_spec("yt_dlp")
+            if spec is None or not spec.origin:
+                return False
+            # Si está en site-packages, es pip
+            return "site-packages" in spec.origin or "dist-packages" in spec.origin
+        except Exception as e:
+            logger.warning(f"Error detectando instalación por pip: {e}")
+            return False
+
 class Updater:
     """Clase principal para gestionar las actualizaciones del programa"""
     
@@ -473,6 +483,21 @@ class Updater:
             # No eliminar el directorio temporal aquí, se necesita para la extracción
             pass
     
+    def cleanup_old_backups(self, max_age_days=1):
+        """Elimina backups con más de max_age_days días."""
+        now = datetime.now()
+        for entry in os.listdir(self.app_root):
+            if entry.startswith("backup_"):
+                path = os.path.join(self.app_root, entry)
+                if os.path.isdir(path):
+                    try:
+                        mtime = datetime.fromtimestamp(os.path.getmtime(path))
+                        if now - mtime > timedelta(days=max_age_days):
+                            shutil.rmtree(path, ignore_errors=True)
+                            logger.info(f"Backup eliminado: {path}")
+                    except Exception as e:
+                        logger.warning(f"Error eliminando backup antiguo {path}: {e}")
+    
     def apply_update(self, zip_path, progress_callback=None):
         """
         Extrae y aplica la actualización
@@ -504,6 +529,9 @@ class Updater:
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_ref.extractall(extract_dir)
                 
+            # Eliminar respaldos antiguos (>1 día)
+            self.cleanup_old_backups()
+            
             if progress_callback:
                 progress_callback.progress.emit(20)
                 
@@ -711,15 +739,14 @@ class Updater:
     @staticmethod
     def update_yt_dlp(parent_widget=None):
         """
-        Actualiza la librería yt-dlp usando un hilo separado
-        
+        Actualiza la librería yt-dlp usando un hilo separado, detectando si es pip o embebido
         Args:
             parent_widget: Widget padre para diálogos
         """
         try:
             progress_handler = UpdateProgress()
             progress_dialog = None
-            
+
             if parent_widget:
                 progress_dialog = QProgressDialog(
                     "Iniciando actualización de yt-dlp...",
@@ -731,7 +758,6 @@ class Updater:
                 progress_dialog.setMinimumDuration(0)
                 progress_dialog.setAutoClose(False)
                 progress_dialog.setAutoReset(False)
-                
                 # Conectar señales
                 progress_handler.progress.connect(progress_dialog.setValue)
                 progress_handler.status.connect(progress_dialog.setLabelText)
@@ -739,29 +765,25 @@ class Updater:
                     lambda msg: QMessageBox.critical(parent_widget, "Error", msg)
                 )
                 progress_handler.finished.connect(
-                    lambda success, msg: QMessageBox.information(parent_widget, 
-                                                              "Actualización", 
-                                                              msg) if success else None
+                    lambda success, msg: QMessageBox.information(parent_widget, "Actualización", msg) if success else None
                 )
-                
                 # Al finalizar, cerrar diálogo
                 progress_handler.finished.connect(progress_dialog.close)
                 progress_handler.error.connect(progress_dialog.close)
-                
                 progress_dialog.show()
                 QApplication.processEvents()
-            
-            # Iniciar actualización en hilo separado
-            thread = YtDlpUpdateThread(parent_widget, progress_handler)
+
+            # Detectar método de instalación
+            if YtDlpPipUpdateThread.is_yt_dlp_installed_by_pip():
+                thread = YtDlpPipUpdateThread(parent_widget, progress_handler)
+            else:
+                thread = YtDlpUpdateThread(parent_widget, progress_handler)
             thread.start()
-            
-            # Mensaje solo si no hay diálogo de progreso
+
             if not parent_widget:
                 logger.info("Actualización de yt-dlp iniciada en segundo plano")
-                
         except Exception as e:
             logger.error(f"Error iniciando actualización de yt-dlp: {e}")
-            
             if parent_widget:
                 QMessageBox.critical(
                     parent_widget,

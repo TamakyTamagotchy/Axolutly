@@ -28,7 +28,29 @@ class YouTubeDownloader(QWidget):
         
         self.init_ui()
         logger.info("Aplicación Axolutly iniciada")
+        # Verificar actualización de la app al iniciar
+        QTimer.singleShot(100, self.check_app_update_on_startup)
 
+    def check_app_update_on_startup(self):
+        """Verifica si hay una nueva versión de la app al iniciar y pregunta al usuario si desea actualizar"""
+        updater = Updater()
+        try:
+            is_new, release = updater.is_update_available()
+            if is_new and release:
+                latest_version = release.get('tag_name', 'desconocida')
+                changelog = release.get('body', '')
+                msg = f"¡Hay una nueva versión disponible!\n\nVersión actual: {updater.get_current_version()}\nNueva versión: {latest_version}\n\n¿Deseas actualizar ahora?\n\nCambios:\n{changelog[:300]}{'...' if len(changelog)>300 else ''}"
+                reply = QMessageBox.question(
+                    self,
+                    "Actualización disponible",
+                    msg,
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    self.check_for_updates()
+        except Exception as e:
+            logger.warning(f"No se pudo verificar actualización al inicio: {e}")
+    
     def check_critical_dlls(self):
         """Verifica que las DLLs críticas estén presentes y muestra advertencias si faltan"""
         try:
@@ -126,7 +148,6 @@ class YouTubeDownloader(QWidget):
             self.download_button = self.create_button("Descargar", Config.ICON_DOWNLOAD, self.start_download, "download_button", enabled=True)
             self.cancel_button = self.create_button("Cancelar", Config.ICON_CANCEL, self.cancel_download, "cancel_button", enabled=False)
             self.open_last_download_button = self.create_button("Abrir última descarga", Config.ICON_FOLDER, self.open_last_download, "open_last_download_button", enabled=False)
-            
             # Integrar animaciones de opacidad en los botones principales usando AnimatedWidget
             buttons = [self.download_button, self.cancel_button, self.open_last_download_button]
             for button in buttons:
@@ -138,22 +159,21 @@ class YouTubeDownloader(QWidget):
             buttons_layout = QHBoxLayout()
             buttons_layout.addWidget(self.download_button)
             buttons_layout.addWidget(self.cancel_button)
-            
+
             # Añadir layouts secundarios usando widgets contenedores para evitar el error de addLayout
             if main_layout is not None:
                 main_layout.addWidget(self.title_label)
                 main_layout.addWidget(self.url_input)
-                
                 options_widget = QWidget()
                 options_widget.setLayout(self.options_layout)
                 main_layout.addWidget(options_widget)
-                
                 buttons_widget = QWidget()
                 buttons_widget.setLayout(buttons_layout)
                 main_layout.addWidget(buttons_widget)
                 main_layout.addWidget(self.open_last_download_button)
-                
                 self.progress_bar = self.create_progress_bar()
+                # Conectar señal de umbral para efectos visuales
+                self.progress_bar.value_threshold_reached.connect(self.on_progress_threshold)
                 self.status_label = self.create_status_label()
                 main_layout.addWidget(self.progress_bar)
                 main_layout.addWidget(self.status_label)
@@ -190,6 +210,17 @@ class YouTubeDownloader(QWidget):
                 
                 self.version_label = self.create_version_label()
                 main_layout.addWidget(self.version_label)
+
+    def on_progress_threshold(self, threshold):
+        """Aplica efectos visuales según el umbral alcanzado en la barra de progreso"""
+        if threshold == 25:
+            self.progress_bar.pulse_animation(duration=400)
+        elif threshold == 50:
+            self.progress_bar.pulse_animation(duration=400)
+        elif threshold == 75:
+            self.progress_bar.pulse_animation(duration=400)
+        elif threshold == 100:
+            self.progress_bar.glow_effect(QColor(0, 255, 0, 120), intensity=25)
 
     def add_shadow_effect(self, button):
         """Agrega un efecto de sombra (box-shadow) a un botón usando QGraphicsDropShadowEffect."""
@@ -372,7 +403,6 @@ class YouTubeDownloader(QWidget):
                         removed = True
                         break
                     except PermissionError as e:
-                        import time
                         time.sleep(0.5)
                     except Exception as e:
                         logger.error(f"Error al eliminar el archivo temporal {full_path}: {str(e)}")
@@ -518,7 +548,7 @@ class YouTubeDownloader(QWidget):
         if self.last_download_path:
             sanitized_path = Utils.sanitize_filepath(self.last_download_path)
             if sanitized_path and os.path.exists(sanitized_path):
-                import sys, subprocess
+                import subprocess
                 if sys.platform.startswith("win"):
                     subprocess.run(["explorer", "/select,", sanitized_path])
                 elif sys.platform == "darwin":
@@ -632,6 +662,7 @@ class YouTubeDownloader(QWidget):
         self.progress_bar.setValue(0)
         self.status_label.setText("")
         self.progress_bar.setStyleSheet("")
+        self.progress_bar.shake_animation(duration=600, intensity=3)
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self.open_last_download_button.setEnabled(False)
@@ -641,17 +672,6 @@ class YouTubeDownloader(QWidget):
     def update_progress(self, percentage: float):
         self.progress_bar.setValue(int(percentage))
         self.status_label.setText(f"Descargando: {int(percentage)}%")
-        
-        # Añadir efectos visuales cuando se alcanzan ciertos porcentajes
-        if percentage >= 25 and percentage < 26:
-            self.progress_bar.pulse_animation(duration=500)
-        elif percentage >= 50 and percentage < 51:
-            self.progress_bar.pulse_animation(duration=500)
-        elif percentage >= 75 and percentage < 76:
-            self.progress_bar.pulse_animation(duration=500)
-        elif percentage >= 99:
-            self.progress_bar.glow_effect(QColor(0, 255, 0, 100), intensity=15)
-            
         if percentage > 0:
             estimated_time = self.calculate_estimated_time(percentage)
             if estimated_time:
@@ -704,8 +724,9 @@ class YouTubeDownloader(QWidget):
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self.progress_bar.setValue(0)
+        self.progress_bar.shake_animation(duration=700, intensity=4)
         logger.error(f"Error en la descarga: {error_message}")
-        self.show_error_message("Ocurrió un error durante la descarga. Por favor, inténtelo de nuevo.")
+        self.show_error_message("Ocurrió un error durante la descarga. Por favor, inténtelo de nuevo.\n\nSugerencia: Intenta actualizar yt-dlp desde el menú Archivo > Actualizar yt-dlp si el problema persiste.")
 
     def check_for_updates(self):
         """Verifica si hay actualizaciones disponibles utilizando el nuevo sistema."""

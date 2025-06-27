@@ -19,36 +19,20 @@ class Utils:
 
     @staticmethod
     def validate_youtube_url(url: str) -> bool:
-        """Valida si una URL corresponde a un video, short, live o playlist de YouTube."""
+        """Valida si una URL corresponde a un video, short, live, playlist o cualquier recurso válido de YouTube."""
         try:
             parsed = urlparse(url)
-            if parsed.netloc.lower() not in {'youtube.com', 'www.youtube.com', 'youtu.be'}:
+            # Aceptar todos los subdominios de youtube.com y youtu.be
+            valid_domains = {'youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be'}
+            if not any(parsed.netloc.lower().endswith(domain) for domain in valid_domains):
                 logger.debug(f"Dominio no válido: {parsed.netloc}")
                 return False
-
-            # Validar diferentes formatos de URL de YouTube
-            patterns = [
-                r'(?:v=)([-\w]{11})(?:\S+)?',  # Video normal
-                r'(?:\/shorts\/)([-\w]{11})',   # Short
-                r'(?:\/live\/)([-\w]{11})',     # Live
-                r'(?:list=)([-\w]{13,})',       # Playlist (IDs tienen al menos 13 caracteres)
-                r'(?:youtu\.be\/)([-\w]{11})'   # Formato corto
-            ]
-
-            # Si es una playlist, verificar que tenga un ID válido
-            if 'list=' in url:
-                playlist_match = re.search(r'list=([-\w]{13,})', url)
-                if playlist_match:
-                    logger.debug(f"URL de playlist válida: {url}")
-                    return True
-
-            # Verificar otros formatos
-            for pattern in patterns:
-                if re.search(pattern, url):
-                    logger.debug(f"URL válida con patrón {pattern}: {url}")
-                    return True
-
-            logger.debug(f"URL no coincide con ningún patrón válido: {url}")
+            # Solo requiere que tenga algún parámetro relevante o path
+            if parsed.path.startswith(('/watch', '/shorts', '/live', '/playlist')) or parsed.netloc == 'youtu.be':
+                return True
+            # También aceptar URLs con parámetro v= o list= en la query
+            if 'v=' in url or 'list=' in url:
+                return True
             return False
         except Exception as e:
             logger.exception(f"Error validando URL: {e}")
