@@ -1,0 +1,1 @@
+Aquí va el archivo FFMPEG puedes descargadlo desde su pagina oficial https://ffmpeg.org/ o descargar el programa que ya contiene dicho programa en su ultima version (7.1)
