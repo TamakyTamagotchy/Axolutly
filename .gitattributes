@@ -1,2 +1,16 @@
+# Oculta todo el código fuente y configuraciones privadas
+/src/
+/config/
+/Animation/
+/Capeta C para codigo respaldo/
+# como oculto mi archivo de arranque en este caso Axolutly.py
+/Axolutly.py
+
+# Permite solo archivos públicos, instaladores y documentación
+!README.md
+!requirements.txt
+!LICENSE
+!icons/
+
 # Auto detect text files and perform LF normalization
 * text=auto
