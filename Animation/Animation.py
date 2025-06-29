@@ -344,96 +344,176 @@ class AnimatedWidget:
     
     @staticmethod
     def add_hover_effect(widget: QWidget, scale: float = 1.05, duration: int = 120):
-        """Agrega efecto de hover (escala) al widget"""
+        """Agrega efecto de hover (escala) al widget evitando acumulación de escalado y usando la geometría real en el primer hover"""
         def enterEvent(event, w=widget):
             original_event = getattr(w.__class__, 'enterEvent', None)
             if original_event:
                 original_event(w, event)
-                
-            rect = w.geometry()
-            # Calcular dimensiones con escala manteniendo el centro
+            # Guardar la geometría original solo en el primer hover
+            if not hasattr(w, '_original_geometry'):
+                w._original_geometry = w.geometry()
+            rect = w._original_geometry
             width_diff = int(rect.width() * scale) - rect.width()
             height_diff = int(rect.height() * scale) - rect.height()
-            
             anim = QPropertyAnimation(w, b"geometry")
             anim.setDuration(duration)
             anim.setStartValue(rect)
-            anim.setEndValue(rect.adjusted(-width_diff//2, -height_diff//2, 
-                                        width_diff//2, height_diff//2))
+            anim.setEndValue(rect.adjusted(-width_diff//2, -height_diff//2, width_diff//2, height_diff//2))
             anim.setEasingCurve(QEasingCurve.Type.OutQuad)
             anim.start()
-            w._hover_anim = anim  # Mantener referencia
-            
+            w._hover_anim = anim
+
         def leaveEvent(event, w=widget):
             original_event = getattr(w.__class__, 'leaveEvent', None)
             if original_event:
                 original_event(w, event)
-                
             if hasattr(w, '_hover_anim') and w._hover_anim.state() == QPropertyAnimation.State.Running:
                 w._hover_anim.stop()
-                
+            if hasattr(w, '_original_geometry'):
+                original_rect = w._original_geometry
+            else:
+                original_rect = w.geometry()
             rect = w.geometry()
-            original_rect = w.parentWidget().layout().itemAt(w.parentWidget().layout().indexOf(w)).geometry()
-            
             anim = QPropertyAnimation(w, b"geometry")
             anim.setDuration(duration)
             anim.setStartValue(rect)
             anim.setEndValue(original_rect)
             anim.setEasingCurve(QEasingCurve.Type.OutQuad)
             anim.start()
-            w._hover_anim = anim  # Mantener referencia
-            
-        # Reemplazar los métodos originales
+            w._hover_anim = anim
+
         widget.enterEvent = enterEvent
         widget.leaveEvent = leaveEvent
-        
         return widget
     
     @staticmethod
     def add_click_effect(widget: QWidget, opacity_min: float = 0.7, duration: int = 120):
-        """Agrega efecto de clic (opacidad) al widget"""
-        # Crear o recuperar efecto de opacidad
-        effect = QGraphicsOpacityEffect(widget)
-        effect.setOpacity(1.0)
-        
-        # Guardar efecto original si existe
-        orig_effect = widget.graphicsEffect()
-        if orig_effect and isinstance(orig_effect, QGraphicsDropShadowEffect):
-            widget._shadow_effect = orig_effect
-            # En PyQt6 no podemos combinar efectos, así que priorizamos opacidad para clicks
-            
-        widget.setGraphicsEffect(effect)
-        widget._opacity_effect = effect
-        
+        """Agrega efecto de clic (opacidad) al widget, robusto ante borrado del QGraphicsOpacityEffect."""
+        def ensure_opacity_effect(w):
+            effect = getattr(w, '_opacity_effect', None)
+            if not effect or not isinstance(effect, QGraphicsOpacityEffect) or effect.parent() is None:
+                effect = QGraphicsOpacityEffect(w)
+                effect.setOpacity(1.0)
+                w.setGraphicsEffect(effect)
+                w._opacity_effect = effect
+            return effect
+
         def mousePressEvent(event, w=widget):
-            original_event = getattr(w.__class__, 'mousePressEvent', None)
-            if original_event:
-                original_event(w, event)
-                
-            anim = QPropertyAnimation(w._opacity_effect, b"opacity")
+            effect = ensure_opacity_effect(w)
+            anim = QPropertyAnimation(effect, b"opacity")
             anim.setDuration(duration)
             anim.setStartValue(1.0)
             anim.setEndValue(opacity_min)
             anim.setEasingCurve(QEasingCurve.Type.OutQuad)
             anim.start()
-            w._click_anim = anim  # Mantener referencia
-            
+            w._click_anim = anim
+            if hasattr(w, 'mousePressEvent_orig'):
+                w.mousePressEvent_orig(event)
+
         def mouseReleaseEvent(event, w=widget):
-            original_event = getattr(w.__class__, 'mouseReleaseEvent', None)
-            if original_event:
-                original_event(w, event)
-                
-            anim = QPropertyAnimation(w._opacity_effect, b"opacity")
+            effect = ensure_opacity_effect(w)
+            anim = QPropertyAnimation(effect, b"opacity")
             anim.setDuration(duration)
             anim.setStartValue(opacity_min)
             anim.setEndValue(1.0)
             anim.setEasingCurve(QEasingCurve.Type.OutQuad)
             anim.start()
-            w._click_anim = anim  # Mantener referencia
-            
-        # Reemplazar los métodos originales
+            w._click_anim = anim
+            if hasattr(w, 'mouseReleaseEvent_orig'):
+                w.mouseReleaseEvent_orig(event)
+
+        # Guardar originales si no existen
+        if not hasattr(widget, 'mousePressEvent_orig'):
+            widget.mousePressEvent_orig = getattr(widget, 'mousePressEvent', lambda e: None)
+        if not hasattr(widget, 'mouseReleaseEvent_orig'):
+            widget.mouseReleaseEvent_orig = getattr(widget, 'mouseReleaseEvent', lambda e: None)
         widget.mousePressEvent = mousePressEvent
         widget.mouseReleaseEvent = mouseReleaseEvent
-        
+        return widget
+    
+    @staticmethod
+    def add_glow_on_hover(widget: QWidget, color: QColor = None, blur_radius: int = 24, duration: int = 180):
+        """Agrega un efecto de glow animado al hacer hover sobre el widget."""
+        if color is None:
+            color = QColor(99, 102, 241, 120)
+        # Asegura que el widget tenga un efecto de sombra
+        effect = widget.graphicsEffect()
+        if not effect or not isinstance(effect, QGraphicsDropShadowEffect):
+            effect = QGraphicsDropShadowEffect(widget)
+            effect.setBlurRadius(10)
+            effect.setColor(QColor(0, 0, 0, 50))
+            effect.setOffset(0, 2)
+            widget.setGraphicsEffect(effect)
+        widget._glow_effect = effect
+        # Animaciones
+        def enterEvent(event, w=widget):
+            anim = QPropertyAnimation(w._glow_effect, b"blurRadius")
+            anim.setDuration(duration)
+            anim.setStartValue(w._glow_effect.blurRadius())
+            anim.setEndValue(blur_radius)
+            anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+            anim.start()
+            w._glow_anim = anim
+            w._glow_effect.setColor(color)
+            if hasattr(w, 'enterEvent_orig'):
+                w.enterEvent_orig(event)
+        def leaveEvent(event, w=widget):
+            anim = QPropertyAnimation(w._glow_effect, b"blurRadius")
+            anim.setDuration(duration)
+            anim.setStartValue(w._glow_effect.blurRadius())
+            anim.setEndValue(10)
+            anim.setEasingCurve(QEasingCurve.Type.InCubic)
+            anim.start()
+            w._glow_anim = anim
+            w._glow_effect.setColor(QColor(0, 0, 0, 50))
+            if hasattr(w, 'leaveEvent_orig'):
+                w.leaveEvent_orig(event)
+        # Guardar originales si no existen
+        if not hasattr(widget, 'enterEvent_orig'):
+            widget.enterEvent_orig = getattr(widget, 'enterEvent', lambda e: None)
+        if not hasattr(widget, 'leaveEvent_orig'):
+            widget.leaveEvent_orig = getattr(widget, 'leaveEvent', lambda e: None)
+        widget.enterEvent = enterEvent
+        widget.leaveEvent = leaveEvent
+        return widget
+
+    @staticmethod
+    def add_bounce_on_click(widget: QWidget, scale: float = 0.92, duration: int = 90):
+        """Agrega un pequeño rebote al hacer clic en el widget."""
+        def mousePressEvent(event, w=widget):
+            if not hasattr(w, '_original_geometry'):
+                w._original_geometry = w.geometry()
+            rect = w._original_geometry
+            width_diff = int(rect.width() * scale) - rect.width()
+            height_diff = int(rect.height() * scale) - rect.height()
+            anim = QPropertyAnimation(w, b"geometry")
+            anim.setDuration(duration)
+            anim.setStartValue(rect)
+            anim.setEndValue(rect.adjusted(-width_diff//2, -height_diff//2, width_diff//2, height_diff//2))
+            anim.setEasingCurve(QEasingCurve.Type.InCubic)
+            anim.start()
+            w._bounce_anim = anim
+            if hasattr(w, 'mousePressEvent_orig'):
+                w.mousePressEvent_orig(event)
+        def mouseReleaseEvent(event, w=widget):
+            if hasattr(w, '_original_geometry'):
+                rect = w.geometry()
+                original_rect = w._original_geometry
+                anim = QPropertyAnimation(w, b"geometry")
+                anim.setDuration(duration)
+                anim.setStartValue(rect)
+                anim.setEndValue(original_rect)
+                anim.setEasingCurve(QEasingCurve.Type.OutBounce)
+                anim.start()
+                w._bounce_anim = anim
+            if hasattr(w, 'mouseReleaseEvent_orig'):
+                w.mouseReleaseEvent_orig(event)
+        # Guardar originales si no existen
+        if not hasattr(widget, 'mousePressEvent_orig'):
+            widget.mousePressEvent_orig = getattr(widget, 'mousePressEvent', lambda e: None)
+        if not hasattr(widget, 'mouseReleaseEvent_orig'):
+            widget.mouseReleaseEvent_orig = getattr(widget, 'mouseReleaseEvent', lambda e: None)
+        widget.mousePressEvent = mousePressEvent
+        widget.mouseReleaseEvent = mouseReleaseEvent
         return widget
 

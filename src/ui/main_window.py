@@ -94,6 +94,19 @@ class YouTubeDownloader(QWidget):
         self.setWindowIcon(QIcon(os.path.join(icon_dir, Config.ICON_YOUTUBE)))
         self.icon_dir = icon_dir 
 
+        # Spinner de carga (GIF)
+        from PyQt6.QtGui import QMovie
+        self.spinner_label = QLabel(self)
+        self.spinner_label.setObjectName("spinner_label")
+        self.spinner_label.setFixedSize(20, 20)  # Tamaño fijo
+        self.spinner_label.setStyleSheet("background: transparent;")
+        self.spinner_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.spinner_label.setScaledContents(True)  # Escalar el GIF al tamaño del label
+        spinner_gif_path = os.path.join(self.icon_dir, Config.ICON_GIF)
+        self.spinner_movie = QMovie(spinner_gif_path)
+        self.spinner_label.setMovie(self.spinner_movie)
+        self.spinner_label.hide()
+
         # Configurar el diseño principal antes de agregar la barra de menú
         main_layout = QVBoxLayout()
         self.setLayout(main_layout)
@@ -175,7 +188,9 @@ class YouTubeDownloader(QWidget):
                 # Conectar señal de umbral para efectos visuales
                 self.progress_bar.value_threshold_reached.connect(self.on_progress_threshold)
                 self.status_label = self.create_status_label()
+                self.file_size_label = self.create_file_size_label()
                 main_layout.addWidget(self.progress_bar)
+                main_layout.addWidget(self.file_size_label)
                 main_layout.addWidget(self.status_label)
                 
                 # Botón de actualización con texto superpuesto - movido más arriba para reducir espacio                
@@ -364,6 +379,14 @@ class YouTubeDownloader(QWidget):
         version_label.setStyleSheet("color: #888888; font-size: 10px;")
         return version_label
 
+    def create_file_size_label(self):
+        """Crea el label que muestra el tamaño del archivo debajo de la barra de progreso"""
+        label = QLabel("")
+        label.setObjectName("file_size_label")
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.hide()  # Oculto por defecto, se muestra cuando hay información
+        return label
+
     def show_error_message(self, message):
         QMessageBox.critical(self, "Error", message)
         logger.error(f"Mensaje de error mostrado al usuario: {message}")
@@ -431,84 +454,22 @@ class YouTubeDownloader(QWidget):
         """
         Sistema de animaciones mejorado para botones usando PyQt6
         """
-
-        def add_opacity_animation(button):
-            effect = QGraphicsOpacityEffect(button)
-            button.setGraphicsEffect(effect)
-            animation = QPropertyAnimation(effect, b"opacity")
-            animation.setDuration(180)
-            animation.setStartValue(1.0)
-            animation.setEndValue(0.7)
-            animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
-
-            # Guardar referencias para evitar que el GC elimine la animación
-            button._opacity_effect = effect
-            button._opacity_animation = animation
-
-            original_enter = getattr(button, 'enterEvent', None)
-            original_leave = getattr(button, 'leaveEvent', None)
-
-            def enterEvent(event):
-                if original_enter:
-                    original_enter(event)
-                animation.setDirection(QPropertyAnimation.Direction.Forward)
-                animation.start()
-
-            def leaveEvent(event):
-                if original_leave:
-                    original_leave(event)
-                animation.setDirection(QPropertyAnimation.Direction.Backward)
-                animation.start()
-
-            button.enterEvent = enterEvent
-            button.leaveEvent = leaveEvent
-
-        # Aplica animación de opacidad a los botones principales
-        if hasattr(self, 'download_button'):
-            add_opacity_animation(self.download_button)
-        if hasattr(self, 'cancel_button'):
-            add_opacity_animation(self.cancel_button)
-        if hasattr(self, 'open_last_download_button'):
-            add_opacity_animation(self.open_last_download_button)
-        if hasattr(self, 'theme_button'):
-            add_opacity_animation(self.theme_button)
+        # Aplica animación de opacidad, hover/click, glow y rebote a los botones principales usando AnimatedWidget
+        for btn_attr in ['download_button', 'cancel_button', 'open_last_download_button', 'theme_button']:
+            btn = getattr(self, btn_attr, None)
+            if btn:
+                AnimatedWidget.add_click_effect(btn)
+                AnimatedWidget.add_hover_effect(btn)
+                AnimatedWidget.add_glow_on_hover(btn)
+                AnimatedWidget.add_bounce_on_click(btn)
 
     def enable_smooth_transitions(self):
         """
         Habilita transiciones suaves para cambios de tema en PyQt6
         """
         def fade_transition():
-            # Crear efecto de opacidad para la transición
-            effect = QGraphicsOpacityEffect(self)
-            self.setGraphicsEffect(effect)
-            
-            # Configurar animación de fade out
-            fade_out = QPropertyAnimation(effect, b"opacity")
-            fade_out.setDuration(150)
-            fade_out.setStartValue(1.0)
-            fade_out.setEndValue(0.0)
-            fade_out.setEasingCurve(QEasingCurve.Type.InOutQuad)
-            
-            # Configurar animación de fade in
-            fade_in = QPropertyAnimation(effect, b"opacity")
-            fade_in.setDuration(150)
-            fade_in.setStartValue(0.0)
-            fade_in.setEndValue(1.0)
-            fade_in.setEasingCurve(QEasingCurve.Type.InOutQuad)
-            
-            # Crear grupo de animaciones secuencial
-            sequence = QSequentialAnimationGroup()
-            sequence.addAnimation(fade_out)
-            sequence.addAnimation(fade_in)
-            
-            # Ejecutar el cambio de tema durante la transición
-            def on_fade_out_finished():
-                self.apply_styles()
-                fade_in.start()
-            
-            fade_out.finished.connect(on_fade_out_finished)
-            fade_out.start()
-
+            AnimatedWidget.fade_out(self, duration=150)
+            QTimer.singleShot(150, lambda: [self.apply_styles(), AnimatedWidget.fade_in(self, duration=150)])
         # Conectar la transición al cambio de tema
         if hasattr(self, 'toggle_theme'):
             original_toggle = self.toggle_theme
@@ -598,6 +559,7 @@ class YouTubeDownloader(QWidget):
         self.download_thread.progress.connect(self.update_progress)
         self.download_thread.finished.connect(self.download_finished)
         self.download_thread.error.connect(self.download_error)
+        self.download_thread.video_info.connect(self.update_video_info)
         self.download_thread.showAuthDialog.connect(self.show_auth_dialog)
         self.download_thread.cancelled.connect(self.handle_cancelled_download)  # <-- conectar señal cancelada
 
@@ -605,7 +567,9 @@ class YouTubeDownloader(QWidget):
         self.cancel_button.setEnabled(True)
         self.open_last_download_button.setEnabled(False)
         self.status_label.setText("Descargando...")
+        self.file_size_label.hide()  # Ocultar el tamaño del archivo anterior
         logger.info(f"Descarga iniciada en modo {'solo audio' if self.audio_only_checkbox.isChecked() else f'{quality}p'}")
+        self.show_spinner()  # Mostrar spinner al iniciar descarga
         self.download_thread.start()
 
     def show_auth_dialog(self):
@@ -661,6 +625,7 @@ class YouTubeDownloader(QWidget):
         self.progress_bar.reset()
         self.progress_bar.setValue(0)
         self.status_label.setText("")
+        self.file_size_label.hide()  # Ocultar tamaño al cancelar
         self.progress_bar.setStyleSheet("")
         self.progress_bar.shake_animation(duration=600, intensity=3)
         self.download_button.setEnabled(True)
@@ -676,7 +641,29 @@ class YouTubeDownloader(QWidget):
             estimated_time = self.calculate_estimated_time(percentage)
             if estimated_time:
                 self.status_label.setText(f"Descargando: {int(percentage)}% - Tiempo estimado: {estimated_time}")
+        self.update_spinner_position(percentage)  # Mover el spinner según el progreso
         logger.debug(f"Progreso actualizado: {percentage}%")
+        self.update_spinner_position(percentage)  # Actualizar posición del spinner
+
+    def update_spinner_position(self, progress_percent: float):
+        """Mueve el spinner sobre la barra de progreso según el porcentaje, adelantado un poco."""
+        # Asegúrate de que la barra de progreso y el spinner existen
+        if not hasattr(self, 'progress_bar') or not hasattr(self, 'spinner_label'):
+            return
+        bar = self.progress_bar
+        spinner = self.spinner_label
+        # Obtener geometría de la barra
+        bar_geom = bar.geometry()
+        # Calcular el rango útil (dejar margen para el GIF)
+        min_x = bar_geom.x()
+        max_x = bar_geom.x() + bar_geom.width() - spinner.width()
+        # Porcentaje adelantado (por ejemplo, +1%)
+        adelantado = min(progress_percent + 1, 100)
+        pos_x = min_x + int((max_x - min_x) * (adelantado / 100))
+        # Colocar el GIF justo encima de la barra
+        pos_y = bar_geom.y() - spinner.height() - 4  # 4px de margen
+        spinner.move(pos_x, pos_y)
+        spinner.raise_()
 
     def calculate_estimated_time(self, current_percentage):
         if not hasattr(self, 'start_time'):
@@ -710,7 +697,7 @@ class YouTubeDownloader(QWidget):
         # Añadir animación de celebración al completar
         self.progress_bar.glow_effect(QColor(0, 255, 0, 100), intensity=25)
         QTimer.singleShot(1000, lambda: self.progress_bar.setValue(0))
-        
+        self.hide_spinner()  # Ocultar spinner al terminar
         self.last_download_path = Utils.sanitize_filepath(file_path)
         logger.info(f"Descarga completada: {os.path.basename(file_path)}")
         self.show_success_message(f"Descarga completada con éxito.\nArchivo: {os.path.basename(file_path)}")
@@ -719,12 +706,15 @@ class YouTubeDownloader(QWidget):
     def download_error(self, error_message):
         # Evitar mostrar error si es cancelación
         if "Descarga cancelada por el usuario" in error_message:
+            self.hide_spinner()
             return
         self.status_label.setText("Error en la descarga")
+        self.file_size_label.hide()  # Ocultar tamaño en caso de error
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self.progress_bar.setValue(0)
         self.progress_bar.shake_animation(duration=700, intensity=4)
+        self.hide_spinner()  # Ocultar spinner si hay error
         logger.error(f"Error en la descarga: {error_message}")
         self.show_error_message("Ocurrió un error durante la descarga. Por favor, inténtelo de nuevo.\n\nSugerencia: Intenta actualizar yt-dlp desde el menú Archivo > Actualizar yt-dlp si el problema persiste.")
 
@@ -751,3 +741,40 @@ class YouTubeDownloader(QWidget):
         # Restaurar estado del botón y label
         self.update_button.setEnabled(True)
         self.update_label.setText("Buscar actualizaciones")  # Restaurar texto del label
+
+    def show_spinner(self):
+        """Muestra el spinner de carga animado, ya posicionado sobre la barra de progreso."""
+        # Obtener el valor actual de la barra de progreso (o 0 si no existe)
+        percent = 0
+        if hasattr(self, 'progress_bar'):
+            percent = self.progress_bar.value()
+        self.update_spinner_position(percent)
+        self.spinner_label.show()
+        self.spinner_movie.start()
+
+    def hide_spinner(self):
+        """Oculta el spinner de carga animado."""
+        self.spinner_movie.stop()
+        self.spinner_label.hide()
+
+    def _get_file_size(self, size_bytes: int) -> str:
+        """Obtiene el tamaño del archivo en formato legible"""
+        try:
+            if size_bytes < 1000:
+                return f"{size_bytes} B"
+            elif size_bytes < 1_000_000:
+                return f"{size_bytes/1_000:.2f} KB"
+            elif size_bytes < 1_000_000_000:
+                return f"{size_bytes/1_000_000:.2f} MB"
+            else:
+                return f"{size_bytes/(1_000_000_000):.2f} GB"
+        except:
+            return "Tamaño desconocido"
+    
+    def update_video_info(self, info: dict):
+        """Actualiza la información del video, incluyendo el tamaño del archivo"""
+        if 'total_size' in info:
+            size_text = self._get_file_size(info['total_size'])
+            self.file_size_label.setText(f"Tamaño del archivo: {size_text}")
+            self.file_size_label.show()
+            logger.info(f"Tamaño del archivo: {size_text}")

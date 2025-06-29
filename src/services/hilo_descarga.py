@@ -307,6 +307,10 @@ class DownloadThread(QThread):
                 downloaded = d.get('downloaded_bytes', 0)
                 percent = int(downloaded / total * 100)
                 self.progress.emit(percent)
+                # Emitir el tamaño total solo la primera vez
+                if not hasattr(self, '_size_emitted') and total:
+                    self.video_info.emit({'total_size': total})
+                    self._size_emitted = True
         elif d['status'] == 'finished':
             self.progress.emit(100)
             self.final_filename = d['info_dict']['_filename']
