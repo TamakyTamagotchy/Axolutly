@@ -5,10 +5,9 @@ Axolutly es una herramienta moderna y potente para descargar videos de YouTube e
 
 ## Descargas
 
-[![Estado del build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/tu_usuario/Axolutly/actions)
-[![Licencia](https://img.shields.io/badge/Licencia-GNU-blue)](LICENSE)
-[![Descargas](https://img.shields.io/badge/descargas-1000+-blueviolet)](https://github.com/tu_usuario/Axolutly/releases)
-[![Versión](https://img.shields.io/badge/versión-1.0.0-yellow)](https://github.com/tu_usuario/Axolutly/releases)
+[![Descargas](https://img.shields.io/badge/descargas-234-blueviolet)](https://github.com/TamakyTamagotchy/Axolutly/releases)
+
+[![Versión](https://img.shields.io/badge/versión-1.2.2-yellow)](https://github.com/TamakyTamagotchy/Axolutly/releases)
 
 ## Características Principales
 - Descarga videos en múltiples calidades, ¡hasta 4K!
@@ -21,9 +20,10 @@ Axolutly es una herramienta moderna y potente para descargar videos de YouTube e
 
 ## Requisitos
 - Windows 10 o superior.
-- Navegador moderno para la autenticación de YouTube.
 - Conexión a Internet estable.
-
+- [![Requisitos](https://img.shields.io/badge/requisitos-Windows%2010+-blue)]
+- [![Conexión](https://img.shields.io/badge/conexión-Estable-green)]
+- [![Tener_PC](https://img.shields.io/badge/tener_PC-Disponible-orange)]
 ## Cómo Usarlo
 1. Descarga e instala el MSI o extrae el contenido del RAR.
 2. Inicia la aplicación.
