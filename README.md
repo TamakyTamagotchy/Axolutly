@@ -10,8 +10,8 @@ Axolutly es una herramienta moderna y potente para descargar videos de YouTube e
 [![Versión](https://img.shields.io/badge/versión-1.2.2-yellow)](https://github.com/TamakyTamagotchy/Axolutly/releases)
 
 ## Características Principales
-- Descarga videos en múltiples calidades, ¡hasta 4K!
-- Extracción de audio en MP3 de forma directa.
+- Descarga videos en múltiples calidades, ¡hasta 4K! claro si el video esta a esa calidad.
+- Extracción de audio en MP3.
 - Soporte para contenido con restricciones de edad a través de autenticación segura.
 - Gestión automatizada y encriptada de cookies.
 - Interfaz de escritorio nativa y experiencia web optimizada.
@@ -44,6 +44,6 @@ Tus comentarios y sugerencias son siempre bienvenidos para seguir mejorando la h
 Si encuentras algún problema o tienes una idea para una nueva característica, por favor, abre un [issue](https://github.com/TamakyTamagotchy/Axolutly/issues).
 
 Puedes darme una estrella en el repositorio para mostrar tu apoyo. 
-[![Estrella](https://img.shields.io/github/stars/TamakyTamagotchy/Axolutly?style=social)](https://github.com/TamakyTamagotchy/Axolutly/stargazers)
+[![Estrella](https://img.shields.io/github/stars/TamakyTamagotchy/Axolutly?style=social)]()
 ## Licencia
 Este proyecto está bajo la [Licencia GNU](LICENSE).
