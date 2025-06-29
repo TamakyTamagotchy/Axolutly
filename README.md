@@ -22,8 +22,11 @@ Axolutly es una herramienta moderna y potente para descargar videos de YouTube e
 - Windows 10 o superior.
 - Conexión a Internet estable.
 [![Requisitos](https://img.shields.io/badge/requisitos-Windows%2010+-blue)]
+
 [![Conexión](https://img.shields.io/badge/conexión-Estable-green)]
+
 [![Tener_PC](https://img.shields.io/badge/tener_PC-Disponible-orange)]
+
 ## Cómo Usarlo
 1. Descarga e instala el MSI o extrae el contenido del RAR.
 2. Inicia la aplicación.
