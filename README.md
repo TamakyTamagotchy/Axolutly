@@ -5,7 +5,7 @@ Axolutly es una herramienta moderna y potente para descargar videos de YouTube e
 
 ## Descargas
 
-[![Descargas](https://img.shields.io/badge/descargas-234-blueviolet)](https://github.com/TamakyTamagotchy/Axolutly/releases)
+[![Descargas](https://img.shields.io/badge/descargar-Axolutly-blueviolet)](https://github.com/TamakyTamagotchy/Axolutly/releases)
 
 [![Versión](https://img.shields.io/badge/versión-1.2.2-yellow)](https://github.com/TamakyTamagotchy/Axolutly/releases)
 
@@ -20,11 +20,11 @@ Axolutly es una herramienta moderna y potente para descargar videos de YouTube e
 
 ## Requisitos
 
-[![Requisitos](https://img.shields.io/badge/requisitos-Windows%2010+-blue)]()
+[![Requisitos](https://img.shields.io/badge/requisitos-Windows%2010+-white)]()
 
-[![Conexión](https://img.shields.io/badge/conexión%20a%20Internet-green)]()
+[![Conexión](https://img.shields.io/badge/conexión%20a%20Internet-yellow)]()
 
-[![Tener_PC](https://img.shields.io/badge/tener%20PC-orange)]()
+[![Tener_PC](https://img.shields.io/badge/tener%20PC-blue)]()
 
 ## Cómo Usarlo
 1. Descarga e instala el MSI o extrae el contenido del RAR.
