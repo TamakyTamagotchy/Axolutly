@@ -7,7 +7,7 @@ Axolutly es una herramienta moderna y potente para descargar videos de YouTube e
 
 [![Descargas](https://img.shields.io/badge/descargar-Axolutly-blueviolet)](https://github.com/TamakyTamagotchy/Axolutly/releases)
 
-[![Versión](https://img.shields.io/badge/versión-1.2.2-yellow)](https://github.com/TamakyTamagotchy/Axolutly/releases)
+[![Versión](https://img.shields.io/badge/versión-1.2.2-yellow)](https://github.com/TamakyTamagotchy/Axolutly/releases/tag/1.2.2)
 
 ## Características Principales
 - Descarga videos en múltiples calidades, ¡hasta 4K! claro si el video esta a esa calidad.
