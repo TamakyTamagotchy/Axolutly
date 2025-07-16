@@ -5,9 +5,7 @@ Axolutly es una herramienta moderna y potente para descargar videos de YouTube e
 
 ## Descargas
 
-[![Descargas](https://img.shields.io/badge/descargar-Axolutly-blueviolet)](https://github.com/TamakyTamagotchy/Axolutly/releases)
-
-[![Versión](https://img.shields.io/badge/versión-1.2.6-yellow)](https://github.com/TamakyTamagotchy/Axolutly/releases/tag/1.2.6)
+[![Descargas](https://img.shields.io/badge/Programa-Axolutly-blueviolet)](https://github.com/TamakyTamagotchy/Axolutly/releases) [![Versión](https://img.shields.io/badge/versión-1.2.6-yellow)](https://github.com/TamakyTamagotchy/Axolutly/releases/tag/1.2.6)
 
 ## Características Principales
 - Descarga videos en múltiples calidades, ¡hasta 4K! claro si el video esta a esa calidad.
@@ -20,18 +18,14 @@ Axolutly es una herramienta moderna y potente para descargar videos de YouTube e
 
 ## Requisitos
 
-[![Requisitos](https://img.shields.io/badge/requisitos-Windows%2010+-white)]()
-
-[![Conexión](https://img.shields.io/badge/conexión%20a%20Internet-yellow)]()
-
-[![Tener_PC](https://img.shields.io/badge/tener%20PC-blue)]()
+[![Requisitos](https://img.shields.io/badge/requisitos-Windows%2010+-white)]() [![Conexión](https://img.shields.io/badge/conexión%20a%20Internet-yellow)]() [![Tener_PC](https://img.shields.io/badge/tener%20PC-blue)]()
 
 ## Cómo Usarlo
 1. Descarga e instala el MSI o extrae el contenido del RAR.
 2. Inicia la aplicación.
-3. Ingresa la URL del video de YouTube.
+3. Ingresa la URL del video de YouTube, Twich o Tiktok.
 4. Selecciona la calidad y formato en cual prefieras descargar (video y/o audio).
-5. ¡Disfruta de tus videos o audios con máxima calidad!
+5. ¡Disfruta de tus videos o audios con máxima calidad! (obvio dependiendo de la calidad maxima del video subido a la web)
 
 ## Seguridad
 Axolutly utiliza tecnología de vanguardia para garantizar:
