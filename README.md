@@ -26,7 +26,7 @@ Axolutly es una herramienta moderna y potente para descargar videos de YouTube e
 ## Cómo Usarlo
 1. Descarga e instala el MSI o extrae el contenido del RAR.
 2. Inicia la aplicación.
-3. Ingresa la URL del video de YouTube, Twich o Tiktok.
+3. Ingresa la URL del video de YouTube, Twich, Pinterest(Videos) o Tiktok.
 4. Selecciona la calidad y formato en cual prefieras descargar (video y/o audio).
 5. ¡Disfruta de tus videos o audios con máxima calidad! (obvio dependiendo de la calidad maxima del video subido a la web)
 
