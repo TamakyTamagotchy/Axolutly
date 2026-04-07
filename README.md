@@ -8,14 +8,14 @@ Axolutly es una herramienta moderna y potente para descargar videos de YouTube e
 
 ## Descargas
 
-[![Descargas](https://img.shields.io/badge/Programa-Axolutly-blueviolet)](https://github.com/TamakyTamagotchy/Axolutly/releases) [![Versión](https://img.shields.io/badge/versión-1.3.9-yellow)](https://github.com/TamakyTamagotchy/Axolutly/releases/tag/1.3.9)
+[![Descargas](https://img.shields.io/badge/Programa-Axolutly-blueviolet)](https://github.com/TamakyTamagotchy/Axolutly/releases) [![Versión](https://img.shields.io/badge/versión-1.4.0-yellow)](https://github.com/TamakyTamagotchy/Axolutly/releases/tag/1.4.0)
 
 ## Características Principales
-- Descarga videos en múltiples calidades, ¡hasta 4K! claro si el video esta a esa calidad.
+- Descarga videos en múltiples calidades, ¡hasta 4K! claro si el video esta subido a esa calidad.
 - Extracción de audio en MP3.
 - Soporte para contenido con restricciones de edad a través de autenticación segura.
 - Gestión automatizada y encriptada de cookies.
-- Interfaz de escritorio nativa y experiencia web optimizada.
+- Interfaz de escritorio nativa y optimizada.
 - Modos de tema claro/oscuro para adaptarse a tus preferencias.
 - Notificaciones en tiempo real del progreso de la descarga.
 
@@ -26,7 +26,7 @@ Axolutly es una herramienta moderna y potente para descargar videos de YouTube e
 ## Cómo Usarlo
 1. Descarga e instala el MSI o extrae el contenido del RAR.
 2. Inicia la aplicación.
-3. Ingresa la URL del video de YouTube, Twich, Pinterest(Videos), Tiktok, Instagram.
+3. Ingresa la URL del video de YouTube, Twich, Pinterest(Videos), Tiktok, Instagram, Facebook, Kick y muchas mas (revisar en el programa).
 4. Selecciona la calidad y formato en cual prefieras descargar (video y/o audio).
 5. ¡Disfruta de tus videos o audios con máxima calidad! (obvio dependiendo de la calidad maxima del video subido a la web)
 
